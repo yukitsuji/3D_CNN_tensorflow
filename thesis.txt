@@ -1,0 +1,39 @@
+1. vehicle detection from 3D Lidar Using Fully Convolutional Network
+
+Lidar Processing
+1. project range scans as 2D maps similat to the depth map of RGBD data
+  1. velodyne scan can be roughly projected and discretized into a 2D point map.
+  θ = atan2(y, x)                     # azimuth angle
+  φ = arcsin(z / √x**2 + y**2 + z**2) # elevation angle
+  r = int(θ / ⊿θ)                    # 2D Map Position
+  c = int(φ / ⊿φ)                    # 2D Map Position
+  ⊿θ is the average horizontal and vertical angle resolution between consecutive beam emitters
+  ⊿θ = 0.08 http://velodynelidar.com/hdl-64e.html
+  ⊿φ = 0.4
+
+  each (r, c) have 2-channel data (d, z), d is √x**2 + y**2
+
+
+
+kitti
+
+Label
+#Values    Name      Description
+----------------------------------------------------------------------------
+   1    type         Describes the type of object: 'Car', 'Van', 'Truck',
+                     'Pedestrian', 'Person_sitting', 'Cyclist', 'Tram',
+                     'Misc' or 'DontCare'
+   1    truncated    Float from 0 (non-truncated) to 1 (truncated), where
+                     truncated refers to the object leaving image boundaries
+   1    occluded     Integer (0,1,2,3) indicating occlusion state:
+                     0 = fully visible, 1 = partly occluded
+                     2 = largely occluded, 3 = unknown
+   1    alpha        Observation angle of object, ranging [-pi..pi]
+   4    bbox         2D bounding box of object in the image (0-based index):
+                     contains left, top, right, bottom pixel coordinates
+   3    dimensions   3D object dimensions: height, width, length (in meters)
+   3    location     3D object location x,y,z in camera coordinates (in meters)
+   1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
+   1    score        Only for results: Float, indicating confidence in
+                     detection, needed for p/r curves, higher is better.
+Car 0.89 0 2.29 0.00 194.70 414.71 373.00 1.57 1.67 4.14 -2.75 1.70 4.10 1.72
