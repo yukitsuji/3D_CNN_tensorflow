@@ -5,6 +5,7 @@ import rospy
 import numpy as np
 import cv2
 import pcl
+import glob
 import std_msgs.msg
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
@@ -18,6 +19,31 @@ def load_pc_from_pcd(pcd_path):
 def load_pc_from_bin(bin_path):
     obj = np.fromfile(bin_path, dtype=np.float32).reshape(-1, 4)
     return obj
+
+def load_pc_from_bins(bin_dir, batch_size, shuffle=False): #TODO
+    bin_pathes = glob.glob(bin_dir + "/*.bin").sort()
+    data_size = len(bin_pathes)
+    bathes = None
+
+    if shuffle:
+        perm = np.random.permutation(data_size)
+        batches = [perm[i * batch_size:(i + 1) * batch_size]]
+    else:
+        perm = np.arange(data_size)
+        batches = [perm[i * batch_size:(i + 1) * batch_size] for i in range(int(np.ceil(data_size / batch_size)))]
+
+    imgfiles = [[bin_pathes[p] for p in b] for b in batches]
+
+    # imgs = ImageLoader(imgfiles)
+
+    for p, imgs in itertools.izip(batches, imgs.wait_images()):
+        for index, img in enumerate(imgs):
+            imgs[index] = np.array(img, dtype=np.float32)
+        if self._callback is not None:
+            imgs = self._callback.create(np.array(imgs, dtype=np.float32))
+        if self._data_y == None:
+            yield np.array(imgs, dtype=np.float32)
+        yield np.array(imgs, dtype=np.float32), self._data_y[p]
 
 def read_label_from_txt(label_path):
     text = np.fromfile(label_path)
@@ -80,7 +106,6 @@ def proj_to_velo(calib_data):
     # return np.dot(inv_velo_to_cam, np.dot(inv_rect, inv_p0))
     return np.dot(inv_velo_to_cam, inv_rect)
 
-
 def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt"):
     p = []
     pc = None
@@ -97,25 +122,15 @@ def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd
     if calib_path:
         calib = read_calib_file(calib_path)
         proj_velo = proj_to_velo(calib)[:, :3]
-        print proj_velo.shape
 
     obj = []
     if label_path:
         if label_type == "txt": #TODO
             places, size = read_label_from_txt(label_path)
             dummy = np.zeros_like(places)
-            print places
             dummy = places.copy()
-            # dummy[:, 0] = places[:, 2]
-            # dummy[:, 1] = places[:, 0]
-            # dummy[:, 2] = places[:, 1]
             if calib_path:
-                print dummy.shape
-                print "proj_velo"
-                print proj_velo
-                # places = np.dot(dummy.transpose(), proj_velo)
                 places = np.dot(dummy, proj_velo.transpose())[:, :3]
-                print places.shape
             else:
                 places = dummy
             rotates = places #TODO
@@ -125,6 +140,7 @@ def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd
             places = bounding_boxes[30]["place"]
             rotates = bounding_boxes[30]["rotate"]
             size = bounding_boxes[30]["size"]
+            print rotates
 
     for place, rotate, sz in zip(places, rotates, size):
         x, y, z = place
@@ -164,11 +180,11 @@ def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd
         r.sleep()
 
 if __name__ == "__main__":
-    pcd_path = "/home/katou01/download/training/velodyne/000010.pcd"
-    label_path = "/home/katou01/download/training/label_2/000010.txt"
-    calib_path = "/home/katou01/download/training/calib/000010.txt"
-    publish_pc2(pcd_path, label_path, calib_path=calib_path, dataformat="pcd")
+    # pcd_path = "/home/katou01/download/training/velodyne/000010.pcd"
+    # label_path = "/home/katou01/download/training/label_2/000010.txt"
+    # calib_path = "/home/katou01/download/training/calib/000010.txt"
+    # publish_pc2(pcd_path, label_path, calib_path=calib_path, dataformat="pcd")
 
-    # bin_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
-    # xml_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
-    # publish_pc2(bin_path, xml_path, dataformat="bin", label_type="xml")
+    bin_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
+    xml_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
+    publish_pc2(bin_path, xml_path, dataformat="bin", label_type="xml")
