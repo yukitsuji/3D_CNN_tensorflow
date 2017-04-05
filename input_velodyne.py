@@ -101,12 +101,13 @@ def proj_to_velo(calib_data):
     rect = calib_data["R0_rect"].reshape(3, 3)
     inv_rect = np.linalg.inv(rect)
     inv_p0 = np.linalg.inv(p0[:, :3])
-    inv_velo_to_cam = np.linalg.pinv(velo_to_cam)
+    inv_velo_to_cam = np.linalg.pinv(velo_to_cam[:, :3])
     # np.dot(cam_to_velo, np.dot(inv_rect,box[3:]))[:3]
     # return np.dot(inv_velo_to_cam, np.dot(inv_rect, inv_p0))
+    # return inv_velo_to_cam
     return np.dot(inv_velo_to_cam, inv_rect)
 
-def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt"):
+def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt", is_velo_cam=False):
     p = []
     pc = None
     bounding_boxes = None
@@ -153,21 +154,21 @@ def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd
         for hei in range(0, int(h*100)):
             for wid in range(0, int(w*100)):
                 for le in range(0, int(l*100)):
-                    a = (x - l / 2.) + le / 100.
+                    a = (x - l / 2.) + le / 100. + 0.27
                     b = (y - w / 2.) + wid / 100.
                     c = (z) + hei / 100.
                     obj.append((a, b, c))
 
     p.append((0, 0, 0))
     print 1
-    pub = rospy.Publisher("/points_raw", PointCloud2, queue_size=10000)
+    pub = rospy.Publisher("/points_raw", PointCloud2, queue_size=1000000)
     rospy.init_node("pc2_publisher")
     header = std_msgs.msg.Header()
     header.stamp = rospy.Time.now()
     header.frame_id = "velodyne"
     points = pc2.create_cloud_xyz32(header, pc[:, :3])
 
-    pub2 = rospy.Publisher("/points_raw1", PointCloud2, queue_size=10000)
+    pub2 = rospy.Publisher("/points_raw1", PointCloud2, queue_size=1000000)
     header = std_msgs.msg.Header()
     header.stamp = rospy.Time.now()
     header.frame_id = "velodyne"
@@ -180,11 +181,17 @@ def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd
         r.sleep()
 
 if __name__ == "__main__":
-    # pcd_path = "/home/katou01/download/training/velodyne/000010.pcd"
-    # label_path = "/home/katou01/download/training/label_2/000010.txt"
-    # calib_path = "/home/katou01/download/training/calib/000010.txt"
+    # pcd_path = "/home/katou01/download/training/velodyne/000012.pcd"
+    # label_path = "/home/katou01/download/training/label_2/000012.txt"
+    # calib_path = "/home/katou01/download/training/calib/000012.txt"
     # publish_pc2(pcd_path, label_path, calib_path=calib_path, dataformat="pcd")
 
-    bin_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
-    xml_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
-    publish_pc2(bin_path, xml_path, dataformat="bin", label_type="xml")
+    # bin_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
+    # xml_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
+    # publish_pc2(bin_path, xml_path, dataformat="bin", label_type="xml")
+
+
+    pcd_path = "/home/katou01/download/training/velodyne/000080.bin"
+    label_path = "/home/katou01/download/training/label_2/000080.txt"
+    calib_path = "/home/katou01/download/training/calib/000080.txt"
+    publish_pc2(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=False)
