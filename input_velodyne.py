@@ -12,6 +12,14 @@ from sensor_msgs.msg import PointCloud2
 # from cv_bridge import CvBridge
 from parse_xml import parseXML
 
+"""
+TODO
+1. Only get Car Label and Data
+2. get by batch data and label
+3. learning by 3D CNN
+4. nms non maximus suppression
+
+"""
 def load_pc_from_pcd(pcd_path):
     p = pcl.load(pcd_path)
     return np.array(list(p), dtype=np.float32)
@@ -20,7 +28,7 @@ def load_pc_from_bin(bin_path):
     obj = np.fromfile(bin_path, dtype=np.float32).reshape(-1, 4)
     return obj
 
-def load_pc_from_bins(bin_dir, batch_size, shuffle=False): #TODO
+def load_pc_from_bins(bin_dir, batch_size, shuffle=False): #TODO: Generator for 3D data
     bin_pathes = glob.glob(bin_dir + "/*.bin").sort()
     data_size = len(bin_pathes)
     bathes = None
@@ -56,10 +64,10 @@ def read_label_from_txt(label_path):
             label = label.split(" ")
             if (label[0] == "DontCare"):
                 continue
-            bounding_box.append(label[8:14])
+            bounding_box.append(label[8:15])
 
     data = np.array(bounding_box, dtype=np.float32)
-    return data[:, 3:], data[:, :3]
+    return data[:, 3:6], data[:, :3], data[:, 6]
 
 def read_label_from_xml(label_path):
     labels = parseXML(label_path)
@@ -79,7 +87,6 @@ def read_label_from_xml(label_path):
                 label_dic[index]["place"] = place
                 label_dic[index]["rotate"] = rotate
                 label_dic[index]["size"] = np.array(size)
-
     return label_dic, size
 
 def read_calib_file(calib_path):
@@ -96,28 +103,32 @@ def read_calib_file(calib_path):
     return data
 
 def proj_to_velo(calib_data):
-    p0 = calib_data['P0'].reshape(3, 4)
-    velo_to_cam = calib_data["Tr_velo_to_cam"].reshape(3, 4)
     rect = calib_data["R0_rect"].reshape(3, 3)
+    velo_to_cam = calib_data["Tr_velo_to_cam"].reshape(3, 4)
     inv_rect = np.linalg.inv(rect)
-    inv_p0 = np.linalg.inv(p0[:, :3])
     inv_velo_to_cam = np.linalg.pinv(velo_to_cam[:, :3])
-    # np.dot(cam_to_velo, np.dot(inv_rect,box[3:]))[:3]
-    # return np.dot(inv_velo_to_cam, np.dot(inv_rect, inv_p0))
-    # return inv_velo_to_cam
     return np.dot(inv_velo_to_cam, inv_rect)
 
 def filter_camera_angle(places):
     bool_in = np.logical_and((places[:, 1] < places[:, 0] - 0.27), (-places[:, 1] < places[:, 0] - 0.27))
+    # bool_in = np.logical_and((places[:, 1] < places[:, 0]), (-places[:, 1] < places[:, 0]))
     return places[bool_in]
+
+def filter_car_data(corners):
+    # consider bottom square
+    print corners[0]
+    argcor = np.argsort(corners[0], axis=0)
+    print corners[0].shape
+    print corners[0][argcor]
+    pass
 
 def create_publish_obj(obj, places, rotates, size):
     for place, rotate, sz in zip(places, rotates, size):
         x, y, z = place
-        print (x, y, z)
+        # print (x, y, z)
         obj.append((x, y, z))
         h, w, l = sz
-        print h, w, l
+        # print h, w, l
         if l > 10:
             continue
         for hei in range(0, int(h*100)):
@@ -129,9 +140,42 @@ def create_publish_obj(obj, places, rotates, size):
                     obj.append((a, b, c))
     return obj
 
-def read_labels(label_path, label_type, calib_path=None, is_velo_cam=False):
+def get_boxcorners(places, rotates, size):
+    corners = []
+    for place, rotate, sz in zip(places, rotates, size):
+        x, y, z = place
+        h, w, l = sz
+        if l > 10:
+            continue
+
+        corner = np.array([
+            [x - l / 2., y - w / 2., z],
+            [x + l / 2., y - w / 2., z],
+            [x - l / 2., y + w / 2., z],
+            [x - l / 2., y - w / 2., z + h],
+            [x - l / 2., y + w / 2., z + h],
+            [x + l / 2., y + w / 2., z],
+            [x + l / 2., y - w / 2., z + h],
+            [x + l / 2., y + w / 2., z + h],
+        ])
+
+        corner -= np.array([x, y, z])
+
+        rotate_matrix = np.array([
+            [np.cos(rotate), -np.sin(rotate), 0],
+            [np.sin(rotate), np.cos(rotate), 0],
+            [0, 0, 1]
+        ])
+
+        a = np.dot(corner, rotate_matrix.transpose())
+        a += np.array([x, y, z])
+        corners.append(a)
+    return np.array(corners)
+
+def read_labels(label_path, label_type, calib_path=None, is_velo_cam=False, proj_velo=None):
     if label_type == "txt": #TODO
-        places, size = read_label_from_txt(label_path)
+        places, size, rotates = read_label_from_txt(label_path)
+        rotates = np.pi / 2 - rotates
         dummy = np.zeros_like(places)
         dummy = places.copy()
         if calib_path:
@@ -140,12 +184,11 @@ def read_labels(label_path, label_type, calib_path=None, is_velo_cam=False):
             places = dummy
         if is_velo_cam:
             places[:, 0] += 0.27
-        rotates = places #TODO
 
     elif label_type == "xml":
         bounding_boxes, size = read_label_from_xml(label_path)
         places = bounding_boxes[30]["place"]
-        rotates = bounding_boxes[30]["rotate"]
+        rotates = bounding_boxes[30]["rotate"][:, 2]
         size = bounding_boxes[30]["size"]
 
     return places, rotates, size
@@ -189,15 +232,19 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
         proj_velo = proj_to_velo(calib)[:, :3]
 
     if label_path:
-        places, rotates, size = read_labels(label_path, label_type, calib_path=calib_path, is_velo_cam=is_velo_cam)
+        places, rotates, size = read_labels(label_path, label_type, calib_path=calib_path, is_velo_cam=is_velo_cam, proj_velo=proj_velo)
+
+    corners = get_boxcorners(places, rotates, size)
+    filter_car_data(corners)
 
     pc = filter_camera_angle(pc)
-    obj = []
-    obj = create_publish_obj(obj, places, rotates, size)
+    # obj = []
+    # obj = create_publish_obj(obj, places, rotates, size)
 
     p.append((0, 0, 0))
     print 1
-    publish_pc2(pc, obj)
+    # publish_pc2(pc, obj)
+    publish_pc2(pc, corners.reshape(-1, 3))
 
 if __name__ == "__main__":
     # pcd_path = "../data/training/velodyne/000012.pcd"
@@ -205,12 +252,12 @@ if __name__ == "__main__":
     # calib_path = "../data/training/calib/000012.txt"
     # process(pcd_path, label_path, calib_path=calib_path, dataformat="pcd")
 
-    bin_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
-    xml_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
-    process(bin_path, xml_path, dataformat="bin", label_type="xml")
+    # bin_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
+    # xml_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
+    # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
-    #
-    # pcd_path = "../data//training/velodyne/000080.bin"
-    # label_path = "../data//training/label_2/000080.txt"
-    # calib_path = "../data//training/calib/000080.txt"
-    # process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+
+    pcd_path = "../data/training/velodyne/000050.bin"
+    label_path = "../data/training/label_2/000050.txt"
+    calib_path = "../data/training/calib/000050.txt"
+    process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
