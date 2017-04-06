@@ -9,7 +9,7 @@ import glob
 import std_msgs.msg
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
-from cv_bridge import CvBridge
+# from cv_bridge import CvBridge
 from parse_xml import parseXML
 
 def load_pc_from_pcd(pcd_path):
@@ -107,42 +107,11 @@ def proj_to_velo(calib_data):
     # return inv_velo_to_cam
     return np.dot(inv_velo_to_cam, inv_rect)
 
-def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt", is_velo_cam=False):
-    p = []
-    pc = None
-    bounding_boxes = None
-    places = None
-    rotates = None
-    proj_velo = None
+def filter_camera_angle(places):
+    bool_in = np.logical_and((places[:, 1] < places[:, 0] - 0.27), (-places[:, 1] < places[:, 0] - 0.27))
+    return places[bool_in]
 
-    if dataformat == "bin":
-        pc = load_pc_from_bin(velodyne_path)
-    elif dataformat == "pcd":
-        pc = load_pc_from_pcd(velodyne_path)
-
-    if calib_path:
-        calib = read_calib_file(calib_path)
-        proj_velo = proj_to_velo(calib)[:, :3]
-
-    obj = []
-    if label_path:
-        if label_type == "txt": #TODO
-            places, size = read_label_from_txt(label_path)
-            dummy = np.zeros_like(places)
-            dummy = places.copy()
-            if calib_path:
-                places = np.dot(dummy, proj_velo.transpose())[:, :3]
-            else:
-                places = dummy
-            rotates = places #TODO
-
-        elif label_type == "xml":
-            bounding_boxes, size = read_label_from_xml(label_path)
-            places = bounding_boxes[30]["place"]
-            rotates = bounding_boxes[30]["rotate"]
-            size = bounding_boxes[30]["size"]
-            print rotates
-
+def create_publish_obj(obj, places, rotates, size):
     for place, rotate, sz in zip(places, rotates, size):
         x, y, z = place
         print (x, y, z)
@@ -154,13 +123,34 @@ def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd
         for hei in range(0, int(h*100)):
             for wid in range(0, int(w*100)):
                 for le in range(0, int(l*100)):
-                    a = (x - l / 2.) + le / 100. + 0.27
+                    a = (x - l / 2.) + le / 100.
                     b = (y - w / 2.) + wid / 100.
                     c = (z) + hei / 100.
                     obj.append((a, b, c))
+    return obj
 
-    p.append((0, 0, 0))
-    print 1
+def read_labels(label_path, label_type, calib_path=None, is_velo_cam=False):
+    if label_type == "txt": #TODO
+        places, size = read_label_from_txt(label_path)
+        dummy = np.zeros_like(places)
+        dummy = places.copy()
+        if calib_path:
+            places = np.dot(dummy, proj_velo.transpose())[:, :3]
+        else:
+            places = dummy
+        if is_velo_cam:
+            places[:, 0] += 0.27
+        rotates = places #TODO
+
+    elif label_type == "xml":
+        bounding_boxes, size = read_label_from_xml(label_path)
+        places = bounding_boxes[30]["place"]
+        rotates = bounding_boxes[30]["rotate"]
+        size = bounding_boxes[30]["size"]
+
+    return places, rotates, size
+
+def publish_pc2(pc, obj):
     pub = rospy.Publisher("/points_raw", PointCloud2, queue_size=1000000)
     rospy.init_node("pc2_publisher")
     header = std_msgs.msg.Header()
@@ -180,18 +170,47 @@ def publish_pc2(velodyne_path, label_path=None, calib_path=None, dataformat="pcd
         pub2.publish(points2)
         r.sleep()
 
+def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt", is_velo_cam=False):
+    p = []
+    pc = None
+    bounding_boxes = None
+    places = None
+    rotates = None
+    size = None
+    proj_velo = None
+
+    if dataformat == "bin":
+        pc = load_pc_from_bin(velodyne_path)
+    elif dataformat == "pcd":
+        pc = load_pc_from_pcd(velodyne_path)
+
+    if calib_path:
+        calib = read_calib_file(calib_path)
+        proj_velo = proj_to_velo(calib)[:, :3]
+
+    if label_path:
+        places, rotates, size = read_labels(label_path, label_type, calib_path=calib_path, is_velo_cam=is_velo_cam)
+
+    pc = filter_camera_angle(pc)
+    obj = []
+    obj = create_publish_obj(obj, places, rotates, size)
+
+    p.append((0, 0, 0))
+    print 1
+    publish_pc2(pc, obj)
+
 if __name__ == "__main__":
-    # pcd_path = "/home/katou01/download/training/velodyne/000012.pcd"
-    # label_path = "/home/katou01/download/training/label_2/000012.txt"
-    # calib_path = "/home/katou01/download/training/calib/000012.txt"
-    # publish_pc2(pcd_path, label_path, calib_path=calib_path, dataformat="pcd")
+    # pcd_path = "../data/training/velodyne/000012.pcd"
+    # label_path = "../data/training/label_2/000012.txt"
+    # calib_path = "../data/training/calib/000012.txt"
+    # process(pcd_path, label_path, calib_path=calib_path, dataformat="pcd")
 
-    # bin_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
-    # xml_path = "/home/katou01/download/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
-    # publish_pc2(bin_path, xml_path, dataformat="bin", label_type="xml")
+    bin_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
+    xml_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
+    process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
-
-    pcd_path = "/home/katou01/download/training/velodyne/000080.bin"
-    label_path = "/home/katou01/download/training/label_2/000080.txt"
-    calib_path = "/home/katou01/download/training/calib/000080.txt"
-    publish_pc2(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=False)
+    #
+    # pcd_path = "../data//training/velodyne/000080.bin"
+    # label_path = "../data//training/label_2/000080.txt"
+    # calib_path = "../data//training/calib/000080.txt"
+    # process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
