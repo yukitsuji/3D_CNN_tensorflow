@@ -64,10 +64,15 @@ def read_label_from_txt(label_path):
             label = label.split(" ")
             if (label[0] == "DontCare"):
                 continue
-            bounding_box.append(label[8:15])
 
-    data = np.array(bounding_box, dtype=np.float32)
-    return data[:, 3:6], data[:, :3], data[:, 6]
+            if label[0] == ("Car" or "Van" or "Truck"):
+                bounding_box.append(label[8:15])
+
+    if bounding_box:
+        data = np.array(bounding_box, dtype=np.float32)
+        return data[:, 3:6], data[:, :3], data[:, 6]
+    else:
+        return None, None, None
 
 def read_label_from_xml(label_path):
     labels = parseXML(label_path)
@@ -116,10 +121,10 @@ def filter_camera_angle(places):
 
 def filter_car_data(corners):
     # consider bottom square
-    print corners[0]
-    argcor = np.argsort(corners[0], axis=0)
-    print corners[0].shape
-    print corners[0][argcor]
+    # print corners[0]
+    # argcor = np.argsort(corners[0], axis=0)
+    # print corners[0].shape
+    # print corners[0][argcor]
     pass
 
 def create_publish_obj(obj, places, rotates, size):
@@ -175,6 +180,8 @@ def get_boxcorners(places, rotates, size):
 def read_labels(label_path, label_type, calib_path=None, is_velo_cam=False, proj_velo=None):
     if label_type == "txt": #TODO
         places, size, rotates = read_label_from_txt(label_path)
+        if places is None:
+            return None, None, None
         rotates = np.pi / 2 - rotates
         dummy = np.zeros_like(places)
         dummy = places.copy()
@@ -236,12 +243,17 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
 
     corners = get_boxcorners(places, rotates, size)
     filter_car_data(corners)
+    print corners
 
     pc = filter_camera_angle(pc)
     # obj = []
     # obj = create_publish_obj(obj, places, rotates, size)
 
     p.append((0, 0, 0))
+    p.append((0, 0, -1))
+    print pc.shape
+    pc = np.vstack((pc, np.array([0, 0, -5, 0])))
+    pc = np.vstack((pc, np.array([0, 0, -4.9, 0])))
     print 1
     # publish_pc2(pc, obj)
     publish_pc2(pc, corners.reshape(-1, 3))
