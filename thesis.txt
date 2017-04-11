@@ -36,4 +36,5 @@ Label
    1    rotation_y   Rotation ry around Y-axis in camera coordinates [-pi..pi]
    1    score        Only for results: Float, indicating confidence in
                      detection, needed for p/r curves, higher is better.
-Car 0.89 0 2.29 0.00 194.70 414.71 373.00 1.57 1.67 4.14 -2.75 1.70 4.10 1.72
+type trun occl alpha bbox  bbox   bbox  bbox  dimen dimen dimen loc   loc loc  rotate
+Car 0.89   0   2.29   0.00 194.70 414.71 373.00 1.57 1.67 4.14 -2.75 1.70 4.10 1.72
