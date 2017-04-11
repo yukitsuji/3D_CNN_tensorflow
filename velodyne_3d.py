@@ -27,7 +27,7 @@ batch 10くらい
 tensorflow
 """
 
-def raw_to_voxel(pc, resolution=0.20):
+def raw_to_voxel(pc, resolution=0.50):
     logic_x = np.logical_and(pc[:, 0] >= 0, pc[:, 0] <90)
     logic_y = np.logical_and(pc[:, 1] >= -50, pc[:, 1] < 50)
     logic_z = np.logical_and(pc[:, 2] >= -4.5, pc[:, 2] < 5.5)
@@ -35,15 +35,33 @@ def raw_to_voxel(pc, resolution=0.20):
     pc =((pc - np.array([0., -50., -4.5])) / resolution).astype(np.int32)
     voxel = np.zeros((int(90 / resolution), int(100 / resolution), int(10 / resolution)))
     voxel[pc[:, 0], pc[:, 1], pc[:, 2]] = 1
+    print voxel.shape
     return voxel
 
-def label_to_voxel(places, size, resolution=0.50):
+def center_to_sphere(places, size, resolution=0.50):
+    """from label center to sphere center"""
+    # for 1/4 sphere
     center = places + size[:, 0] / 2.
-    center = int((center - np.array([0, -500, -45]) / resolution))
+    sphere_center = ((center - np.array([0., -50., -4.5])) / (resolution * 4)).astype(np.int32)
+    return sphere_center
+
+def sphere_to_center(p_sphere, resolution):
+    """from sphere center to label center"""
+    center = p_sphere * (resolution*4) + np.array([0., -50., -4.5])
     return center
 
-def corner_to_train(corners, a):
-    pass
+def voxel_to_corner(corner_vox, resolution, center):
+    """from """
+    corners = center + corner_vox
+    return corners
+
+def corner_to_train(corners, sphere_center, resolution=0.50):
+    """compare original corners  and  sphere centers"""
+    for index, corner, center in enumerate(zip(corners, sphere_center)):
+        corners[index] = corner - center
+
+    return corners
+    # corners - sphere_to_center
 
 def confirm(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt", is_velo_cam=False):
     p = []
@@ -100,13 +118,13 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
 
     corners = get_boxcorners(places, rotates, size)
     filter_car_data(corners)
-    print corners
-
     pc = filter_camera_angle(pc)
     print pc.shape
     print pc.max(axis=0), pc.min(axis=0)
     print 1
     pc =  raw_to_voxel(pc)
+    print corners.shape
+    print places.shape
     # print pc.shape
     # print pc.max(axis=0), pc.min(axis=0)
     # print pc
