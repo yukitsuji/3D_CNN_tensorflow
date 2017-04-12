@@ -228,7 +228,6 @@ def raw_to_voxel(pc, resolution=0.50):
     pc =((pc - np.array([0., -50., -4.5])) / resolution).astype(np.int32)
     voxel = np.zeros((int(90 / resolution), int(100 / resolution), int(10 / resolution)))
     voxel[pc[:, 0], pc[:, 1], pc[:, 2]] = 1
-    print voxel.shape
     return voxel
 
 def center_to_sphere(places, size, resolution=0.50):
@@ -256,6 +255,12 @@ def corner_to_train(corners, sphere_center, resolution=0.50):
     for index, (corner, center) in enumerate(zip(corners, sphere_center)):
         train_corners[index] = corner - center
     return train_corners
+
+def corner_to_voxel(voxel_shape, corners, sphere_center):
+    corner_voxel = np.zeros((voxel_shape[0] / 4, voxel_shape[1] / 4, voxel_shape[2] /4, 24))
+    corner_voxel[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = corners
+    return corner_voxel
+
 
 def create_objectness_label(sphere_center, resolution=0.5):
     obj_maps = np.zeros((int(90 / (resolution * 4)), int(100 / (resolution * 4)), int(10 / (resolution * 4))))
