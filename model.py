@@ -1,9 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import sys
-sys.path.append("/Users/tsujiyuuki/env_python/code/my_code/Data_Augmentation")
 import numpy as np
-from base_vgg16 import Vgg16 as Vgg
 import tensorflow as tf
+from input_velodyne import *
 
 def batch_norm(inputs, is_training, decay=0.9, eps=1e-5):
     """Batch Normalization
@@ -69,176 +68,105 @@ def conv3DLayer(input_layer, input_dim, output_dim, height, width, length, strid
         b = tf.get_variable("bias", shape=[output_dim], dtype=tf.float32, initializer=tf.constant_initializer(0.0))
         conv = tf.nn.conv3d(input_layer, kernel, stride, padding=padding)
         bias = tf.nn.bias_add(conv, b)
+        if activation:
+            bias = activation(bias, name="activation")
     return bias
 
-def vox_vehicle_model(sess, vggpath=None, image_shape=(300, 300), \
-              is_training=None, use_batchnorm=False, activation=tf.nn.relu, \
-              num_classes=0, normalization=[], atrous=False, rate=1, implement_atrous=False):
-    """
-       1. input RGB images and labels
-       2. edit images like [-1, image_shape[0], image_shape[1], 3]
-       3. Create Annotate Layer?
-       4. input x into Vgg16 architecture(pretrained)
-       5.
-    """
-    voxesl = tf.placeholder(tf.float32, [None, ])
-    # images = tf.placeholder(tf.float32, [None, image_shape[0], image_shape[1], 3])
-    # vgg = Vgg(vgg16_npy_path=vggpath)
-    # vgg.build_model(images)
-    #
-    # with tf.variable_scope("extended_model") as scope:
-    #     # active in training
-    #     phase_train = tf.placeholder(tf.bool, name="phase_traing") if is_training else None
-    #     extended_model = ExtendedLayer()
-    #     extended_model.build_model(vgg.conv5_3, use_batchnorm=use_batchnorm, atrous=atrous, rate=rate, \
-    #                                is_training=phase_train, activation=activation, lr_mult=1, implement_atrous=implement_atrous)
+def conv3D_to_output(input_layer, input_dim, output_dim, height, width, length, stride, activation=tf.nn.relu, padding="SAME", name=""):
+    #[batch, 32, 32, 32, channel]
+    with tf.variable_scope("conv3D" + name):
+        kernel = tf.get_variable("weights", shape=[length, height, width, input_dim, output_dim], \
+            dtype=tf.float32, initializer=tf.truncated_normal_initializer(stddev=0.1))
+        conv = tf.nn.conv3d(input_layer, kernel, stride, padding=padding)
+    return conv
 
-    # with tf.variable_scope("multibox_layer"):
-    #     from_layers = [vgg.conv4_3, extended_model.conv_7, extended_model.conv_8_2,
-    #                    extended_model.conv_9_2, extended_model.conv_10_2, extended_model.conv_11_2]
-    #     multibox_layer = MultiboxLayer()
-    #     multibox_layer.build_model(from_layers, num_classes=0, normalization=normalization)
-    #
-    initialized_var = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="extended_model")
-    sess.run(tf.variables_initializer(initialized_var))
-
-    return extended_model
-
-
-
-class ExtendedLayer(object):
+class BNBLayer(object):
     def __init__(self):
         pass
 
-    def build_model(self, input_layer, use_batchnorm=False, is_training=True, atrous=False, \
-                    rate=1, activation=tf.nn.relu, implement_atrous=False, lr_mult=1):
-        if implement_atrous:
-            if atrous:
-                self.pool_5 = maxpool2d(input_layer, kernel=3, stride=1, name="pool5", padding="SAME")
-            else:
-                self.pool_5 = maxpool2d(input_layer, kernel=2, stride=2, name="pool5", padding="SAME") #TODO: padding is valid or same
+    def build_graph(self, voxel, activation=tf.nn.relu):
+        self.layer1 = conv3DLayer(voxel, 1, 10, 5, 5, 5, [1, 2, 2, 2, 1], name="layer1", activation=activation)
+        self.layer2 = conv3DLayer(self.layer1, 10, 20, 5, 5, 5, [1, 2, 2, 2, 1], name="layer2", activation=activation)
 
-            kernel_size = 3
-            if atrous:
-                rate *= 6
-                # pad = int(((kernel_size + (rate - 1) * (kernel_size - 1)) - 1) / 2)
-                self.conv_6 = convBNLayer(self.pool_5, use_batchnorm, is_training, 512, 1024, kernel_size, 1, \
-                                          name="conv_6", activation=tf.nn.relu, atrous=True, rate=rate)
-            else:
-                rate *= 3
-                # pad = int(((kernel_size + (rate - 1) * (kernel_size - 1)) - 1) / 2)
-                self.conv_6 = convBNLayer(self.pool_5, use_batchnorm, is_training, 512, 1024, kernel_size, 1, \
-                                          name="conv_6", activation=tf.nn.relu, atrous=True, rate=rate)
-        else:
-            self.pool_5 = maxpool2d(input_layer, kernel=3, stride=1, name="pool5", padding="SAME")
-            self.conv_6 = convBNLayer(self.pool_5, use_batchnorm, is_training, 512, 1024, 3, 1, \
-                                      name="conv_6", activation=tf.nn.relu, atrous=False, rate=rate)
+        self.objectness = conv3D_to_output(self.layer2, 20, 2, 1, 1, 1, [1, 1, 1, 1, 1], name="objectness", activation=None)
+        self.cordinate = conv3D_to_output(self.layer2, 20, 24, 3, 3, 3, [1, 1, 1, 1, 1], name="cordinate", activation=None)
 
-        self.conv_7 = convBNLayer(self.conv_6, use_batchnorm, is_training, 1024, 1024, 1, 1, name="conv_7", activation=activation)
-        self.conv_8_1 = convBNLayer(self.conv_7, use_batchnorm, is_training, 1024, 256, 1, 1, name="conv_8_1", activation=activation)
-        self.conv_8_2 = convBNLayer(self.conv_8_1, use_batchnorm, is_training, 256, 512, 3, 2, name="conv_8_2", activation=activation)
-        self.conv_9_1 = convBNLayer(self.conv_8_2, use_batchnorm, is_training, 512, 128, 1, 1, name="conv_9_1", activation=activation)
-        self.conv_9_2 = convBNLayer(self.conv_9_1, use_batchnorm, is_training, 128, 256, 3, 2, name="conv_9_2", activation=activation)
-        self.conv_10_1 = convBNLayer(self.conv_9_2, use_batchnorm, is_training, 256, 128, 1, 1, name="conv_10_1", activation=activation)
-        self.conv_10_2 = convBNLayer(self.conv_10_1, use_batchnorm, is_training, 128, 256, 3, 1, name="conv_10_2", activation=activation, padding="VALID")
-        self.conv_11_1 = convBNLayer(self.conv_10_2, use_batchnorm, is_training, 256, 128, 1, 1, name="conv_11_1", activation=activation)
-        self.conv_11_2 = convBNLayer(self.conv_11_1, use_batchnorm, is_training, 128, 256, 3, 1, name="conv_11_2", activation=activation, padding="VALID")
+def ssd_model(sess, voxel, voxel_shape=(300, 300, 300),activation=tf.nn.relu):
+    voxel = tf.placeholder(tf.float32, [None, voxel_shape[1], voxel_shape[2], voxel_shape[3], 1])
+    with tf.variable_scope("3D_CNN_model") as scope:
+        bnb_model = BNBLayer()
+        bnb_model.build_graph(voxel, activation=activation)
 
-def ssd_model(sess, vggpath=None, image_shape=(300, 300), \
-              is_training=None, use_batchnorm=False, activation=tf.nn.relu, \
-              num_classes=0, normalization=[], atrous=False, rate=1, implement_atrous=False):
-    """
-       1. input RGB images and labels
-       2. edit images like [-1, image_shape[0], image_shape[1], 3]
-       3. Create Annotate Layer?
-       4. input x into Vgg16 architecture(pretrained)
-       5.
-    """
-    voxesl = tf.placeholder(tf.float32, [None, ])
-    # images = tf.placeholder(tf.float32, [None, image_shape[0], image_shape[1], 3])
-    # vgg = Vgg(vgg16_npy_path=vggpath)
-    # vgg.build_model(images)
-    #
-    # with tf.variable_scope("extended_model") as scope:
-    #     # active in training
-    #     phase_train = tf.placeholder(tf.bool, name="phase_traing") if is_training else None
-    #     extended_model = ExtendedLayer()
-    #     extended_model.build_model(vgg.conv5_3, use_batchnorm=use_batchnorm, atrous=atrous, rate=rate, \
-    #                                is_training=phase_train, activation=activation, lr_mult=1, implement_atrous=implement_atrous)
-
-    # with tf.variable_scope("multibox_layer"):
-    #     from_layers = [vgg.conv4_3, extended_model.conv_7, extended_model.conv_8_2,
-    #                    extended_model.conv_9_2, extended_model.conv_10_2, extended_model.conv_11_2]
-    #     multibox_layer = MultiboxLayer()
-    #     multibox_layer.build_model(from_layers, num_classes=0, normalization=normalization)
-    #
-    initialized_var = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="extended_model")
+    initialized_var = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="3D_CNN_model")
     sess.run(tf.variables_initializer(initialized_var))
+    return bnb_model
 
-    return extended_model
+def loss_func(model, map_shape=(90, 100, 10)):
+    # center = tf.placeholder(tf.float32, [batch_num, None, 3])
+    g_map = tf.placeholder(tf.float32, [None, map_shape[0], map_shape[1], map_shape[2]])
+    g_cord = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list())
+    object_loss = tf.multiply(g_map, model.objectness[:, :, :, :, 0])
+    non_gmap = tf.subtract(tf.ones_like(g_map, dtype=tf.float32), g_map)
+    nonobject_loss = tf.multiply(non_gmap, model.objectness[:, :, :, :, 1])
+    sum_object_loss = tf.add(object_loss, nonobject_loss)
+    bunbo = tf.add(tf.exp(model.objectness[:, :, :, :, 0]), tf.exp(model.objectness[:, :, :, :, 1]))
+    obj_loss = tf.reduce_sum(tf.div(sum_object_loss, bunbo))
 
-class MultiboxLayer(object):
-    def __init__(self):
-        pass
+    # g_cord   [batch, num, 24]
+    # cord_loss  [batch, num, 24]
+    cord_diff = tf.multiply(g_map, tf.reduce_sum(tf.square(tf.subtract(model.cordinate, g_cord)), 4))
+    cord_loss = tf.reduce_sum(cord_diff)
+    return tf.add(obj_loss, cord_loss)
 
-    # TODO: validate this is correct or not
-    def l2_normalization(self, input_layer, scale=20):
-        return tf.nn.l2_normalize(input_layer, dim) * scale
+def create_optimizer(all_loss):
+    opt = tf.train.AdamOptimizer(0.01)
+    optimizer = opt.minimize(all_loss)
+    return optimizer
 
-    def createMultiBoxHead(self, from_layers, num_classes=0, normalizations=[], \
-                           use_batchnorm=False, is_training=None, activation=None, \
-                           kernel_size=3, prior_boxes=[], kernel_sizes=[]):
-        """
-           # Args:
-               from_layers(list)   : list of input layers
-               num_classes(int)    : num of label's classes that this architecture detects
-               normalizations(list): list of scale for normalizations
-                                     if value <= 0, not apply normalization to the specified layer
-        """
-        assert num_classes > 0, "num of label's class  must be positive number"
-        if normalizations:
-            assert len(from_layers) == len(normalizations), "from_layers and normalizations should have same length"
+def process(velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
+    p = []
+    pc = None
+    bounding_boxes = None
+    places = None
+    rotates = None
+    size = None
+    proj_velo = None
 
-        num_list = len(from_layers)
-        for index, kernel_size, layer, norm in zip(range(num_list), kernel_sizes, from_layers, normalizations):
-            input_layer = layer
-            with tf.variable_scope("layer" + str(index+1)):
-                if norm > 0:
-                    scale = tf.get_variable("scale", trainable=True, initializer=tf.constant(norm))#initialize = norm
-                    input_layer = self.l2_normalization(input_layer, scale)
+    if dataformat == "bin":
+        pc = load_pc_from_bin(velodyne_path)
+    elif dataformat == "pcd":
+        pc = load_pc_from_pcd(velodyne_path)
 
-                # create location prediction layer
-                loc_output_dim = 4 * prior_num # (center_x, center_y, width, height)
-                location_layer = convBNLayer(input_layer, use_batchnorm, is_training, input_layer.get_shape()[0], loc_output_dim, kernel_size, 1, name="loc_layer", activation=activation)
-                # from shape : (batch, from_kernel, from_kernel, loc_output_dim)
-                # to         : (batch, )
-                location_pred = tf.reshape(location_layer, [-1, ])
+    if calib_path:
+        calib = read_calib_file(calib_path)
+        proj_velo = proj_to_velo(calib)[:, :3]
 
-                # create confidence prediction layer
-                conf_output_dim = num_classes * prior_num
-                confidence_layer = convBNLayer(input_layer, use_batchnorm, is_training, input_layer.get_shape()[0], conf_output_dim, kernel_size, 1, name="conf_layer", activation=activation)
-                confidence_pred = tf.reshape(confidence_pred, [-1, ])
+    if label_path:
+        places, rotates, size = read_labels(label_path, label_type, calib_path=calib_path, is_velo_cam=is_velo_cam, proj_velo=proj_velo)
 
-                # Flatten each output
+    corners = get_boxcorners(places, rotates, size)
+    filter_car_data(corners)
+    pc = filter_camera_angle(pc)
 
-                # append result of each results
+    voxel =  raw_to_voxel(pc, resolution=resolution)
+    center_sphere = center_to_sphere(places, size, resolution=resolution)
+    corner_label = corner_to_train(corners, center_sphere, resolution=resolution)
+    g_map = create_objectness_label(center_sphere, resolution=resolution)
+    g_cord = corner_label.reshape(corner_label.shape[0], -1)
 
-        return None
-
-if __name__ == '__main__':
-    import sys
-    import matplotlib.pyplot as plt
-    from PIL import Image as im
-    sys.path.append('/home/katou01/code/grid/DataAugmentation')
-    from resize import resize
-
-    image = im.open("./test_images/test1.jpg")
-    image = np.array(image, dtype=np.float32)
-    new_image = image[np.newaxis, :]
-    batch_image = np.vstack((new_image, new_image))
-    batch_image = resize(batch_image, size=(300, 300))
+    voxel = voxel.reshape(1, voxel.shape[0], voxel.shape[1], voxel.shape[2], 1)
+    g_map = g_map[np.newaxis,:, :, :]
+    g_cord = g_cord[np.newaxis, :]
+    center_sphere = center_sphere[np.newaxis, :]
 
     with tf.Session() as sess:
-        model = ssd_model(sess, batch_image, activation=None, atrous=False, rate=1, implement_atrous=False)
+        model = ssd_model(sess, voxel, voxel_shape=voxel.shape, activation=tf.nn.relu)
         print(vars(model))
-        # tf.summary.scalar('model', model)
+        total_loss = loss_func(model)
+        optimizer = create_optimizer(total_loss)
+
+if __name__ == '__main__':
+    pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
+    label_path = "/home/katou01/download/training/label_2/000700.txt"
+    calib_path = "/home/katou01/download/training/calib/000700.txt"
+    process(pcd_path, label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)

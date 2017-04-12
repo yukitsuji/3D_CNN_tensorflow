@@ -220,6 +220,48 @@ def publish_pc2(pc, obj):
         pub2.publish(points2)
         r.sleep()
 
+def raw_to_voxel(pc, resolution=0.50):
+    logic_x = np.logical_and(pc[:, 0] >= 0, pc[:, 0] <90)
+    logic_y = np.logical_and(pc[:, 1] >= -50, pc[:, 1] < 50)
+    logic_z = np.logical_and(pc[:, 2] >= -4.5, pc[:, 2] < 5.5)
+    pc = pc[:, :3][np.logical_and(logic_x, np.logical_and(logic_y, logic_z))]
+    pc =((pc - np.array([0., -50., -4.5])) / resolution).astype(np.int32)
+    voxel = np.zeros((int(90 / resolution), int(100 / resolution), int(10 / resolution)))
+    voxel[pc[:, 0], pc[:, 1], pc[:, 2]] = 1
+    print voxel.shape
+    return voxel
+
+def center_to_sphere(places, size, resolution=0.50):
+    """from label center to sphere center"""
+    # for 1/4 sphere
+    center = places.copy()
+    center[:, 0] = center[:, 0] + size[:, 0] / 2.
+    sphere_center = ((center - np.array([0., -50., -4.5])) / (resolution * 4)).astype(np.int32)
+    return sphere_center
+
+def sphere_to_center(p_sphere, resolution=0.5):
+    """from sphere center to label center"""
+    center = p_sphere * (resolution*4) + np.array([0., -50., -4.5])
+    return center
+
+def voxel_to_corner(corner_vox, resolution, center):#TODO
+    """from """
+    corners = center + corner_vox
+    return corners
+
+def corner_to_train(corners, sphere_center, resolution=0.50):
+    """compare original corners  and  sphere centers"""
+    train_corners = corners.copy()
+    sphere_center = sphere_to_center(sphere_center, resolution=resolution)
+    for index, (corner, center) in enumerate(zip(corners, sphere_center)):
+        train_corners[index] = corner - center
+    return train_corners
+
+def create_objectness_label(sphere_center, resolution=0.5):
+    obj_maps = np.zeros((int(90 / (resolution * 4)), int(100 / (resolution * 4)), int(10 / (resolution * 4))))
+    obj_maps[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = 1
+    return obj_maps
+
 def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt", is_velo_cam=False):
     p = []
     pc = None

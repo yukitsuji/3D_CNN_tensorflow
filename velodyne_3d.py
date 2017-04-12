@@ -41,7 +41,8 @@ def raw_to_voxel(pc, resolution=0.50):
 def center_to_sphere(places, size, resolution=0.50):
     """from label center to sphere center"""
     # for 1/4 sphere
-    center = places + size[:, 0] / 2.
+    center = places.copy()
+    center[:, 0] = center[:, 0] + size[:, 0] / 2.
     sphere_center = ((center - np.array([0., -50., -4.5])) / (resolution * 4)).astype(np.int32)
     return sphere_center
 
@@ -50,18 +51,17 @@ def sphere_to_center(p_sphere, resolution):
     center = p_sphere * (resolution*4) + np.array([0., -50., -4.5])
     return center
 
-def voxel_to_corner(corner_vox, resolution, center):
+def voxel_to_corner(corner_vox, resolution, center):#TODO
     """from """
     corners = center + corner_vox
     return corners
 
 def corner_to_train(corners, sphere_center, resolution=0.50):
     """compare original corners  and  sphere centers"""
-    for index, corner, center in enumerate(zip(corners, sphere_center)):
+    sphere_center = sphere_to_center(sphere_center, resolution)
+    for index, (corner, center) in enumerate(zip(corners, sphere_center)):
         corners[index] = corner - center
-
     return corners
-    # corners - sphere_to_center
 
 def confirm(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt", is_velo_cam=False):
     p = []
@@ -119,12 +119,15 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     corners = get_boxcorners(places, rotates, size)
     filter_car_data(corners)
     pc = filter_camera_angle(pc)
-    print pc.shape
-    print pc.max(axis=0), pc.min(axis=0)
-    print 1
-    pc =  raw_to_voxel(pc)
-    print corners.shape
-    print places.shape
+
+
+    voxel =  raw_to_voxel(pc)
+    center_sphere = center_to_sphere(places, size)
+    corner_label = corner_to_train(corners, center_sphere)
+    print center_sphere
+    print corner_label
+
+
     # print pc.shape
     # print pc.max(axis=0), pc.min(axis=0)
     # print pc
@@ -141,7 +144,7 @@ if __name__ == "__main__":
     # xml_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
-    pcd_path = "/home/katou01/download/training/velodyne/000300.bin"
-    label_path = "/home/katou01/download/training/label_2/000300.txt"
-    calib_path = "/home/katou01/download/training/calib/000300.txt"
+    pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
+    label_path = "/home/katou01/download/training/label_2/000700.txt"
+    calib_path = "/home/katou01/download/training/calib/000700.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
