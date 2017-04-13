@@ -282,9 +282,9 @@ def process(velodyne_path, label_path=None, calib_path=None, resolution=0.2, dat
         optimizer = create_optimizer(total_loss)
 
 if __name__ == '__main__':
-    pcd_path = "/home/katou01/download/training/velodyne/*.bin"
-    label_path = "/home/katou01/download/training/label_2/*.txt"
-    calib_path = "/home/katou01/download/training/calib/*.txt"
+    pcd_path = "../data/training/velodyne/*.bin"
+    label_path = "../data/training/label_2/*.txt"
+    calib_path = "../data/training/calib/*.txt"
     train(30, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
 
     # pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
