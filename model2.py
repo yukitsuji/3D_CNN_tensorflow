@@ -89,7 +89,7 @@ class BNBLayer(object):
         self.layer1 = conv3DLayer(voxel, 1, 10, 5, 5, 5, [1, 2, 2, 2, 1], name="layer1", activation=activation)
         self.layer2 = conv3DLayer(self.layer1, 10, 20, 5, 5, 5, [1, 2, 2, 2, 1], name="layer2", activation=activation)
 
-        self.objectness = conv3D_to_output(self.layer2, 20, 2, 1, 1, 1, [1, 1, 1, 1, 1], name="objectness", activation=None)
+        self.objectness = conv3D_to_output(self.layer2, 20, 1, 1, 1, 1, [1, 1, 1, 1, 1], name="objectness", activation=None)
         self.cordinate = conv3D_to_output(self.layer2, 20, 24, 3, 3, 3, [1, 1, 1, 1, 1], name="cordinate", activation=None)
 
 def ssd_model(sess, voxel_shape=(300, 300, 300),activation=tf.nn.relu):
@@ -121,21 +121,20 @@ def loss_func(model):
     return tf.add(obj_loss, cord_loss), g_map, g_cord
 
 def loss_func2(model):
-    # center = tf.placeholder(tf.float32, [batch_num, None, 3])
     g_map = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list()[:4])
-    g_cord = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list())
-    object_loss = tf.multiply(g_map, model.objectness[:, :, :, :, 0])
-    non_gmap = tf.subtract(tf.ones_like(g_map, dtype=tf.float32), g_map)
-    nonobject_loss = tf.multiply(non_gmap, model.objectness[:, :, :, :, 1])
-    # sum_object_loss = tf.add(tf.exp(object_loss), tf.exp(nonobject_loss))
-    sum_object_loss = tf.exp(-tf.add(object_loss, nonobject_loss))
-    bunbo = tf.add(tf.exp(-model.objectness[:, :, :, :, 0]), tf.exp(-model.objectness[:, :, :, :, 1]))
-    obj_loss = 0.005 * tf.reduce_sum(-tf.log(tf.div(sum_object_loss, bunbo)))
+    obj_loss = tf.reduce_sum(tf.square(tf.subtract(model.objectness[:, :, :, :, 0], g_map)))
+    # object_loss = tf.multiply(g_map, model.objectness[:, :, :, :, 0])
+    # non_gmap = tf.subtract(tf.ones_like(g_map, dtype=tf.float32), g_map)
+    # nonobject_loss = tf.multiply(non_gmap, model.objectness[:, :, :, :, 1])
+    # sum_object_loss = tf.exp(-tf.add(object_loss, nonobject_loss))
+    # bunbo = tf.add(tf.exp(-model.objectness[:, :, :, :, 0]), tf.exp(-model.objectness[:, :, :, :, 1]))
+    # obj_loss = 0.005 * tf.reduce_sum(-tf.log(tf.div(sum_object_loss, bunbo)))
 
     # g_cord   [batch, num, 24]
     # cord_loss  [batch, num, 24]
+    g_cord = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list())
     cord_diff = tf.multiply(g_map, tf.reduce_sum(tf.square(tf.subtract(model.cordinate, g_cord)), 4))
-    cord_loss = tf.reduce_sum(cord_diff)
+    cord_loss = tf.reduce_sum(cord_diff) * 0.1
     return tf.add(obj_loss, cord_loss), g_map, g_cord
 
 def create_optimizer(all_loss):
@@ -146,12 +145,12 @@ def create_optimizer(all_loss):
 def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
     # tf Graph input
     batch_size = batch_num
-    training_epochs = 2
+    training_epochs = 5
 
     with tf.Session() as sess:
         model, voxel = ssd_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
         saver = tf.train.Saver()
-        total_loss, g_map, g_cord = loss_func(model)
+        total_loss, g_map, g_cord = loss_func2(model)
         optimizer = create_optimizer(total_loss)
         init = tf.global_variables_initializer()
 
@@ -167,7 +166,7 @@ def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution
                 print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(c))
 
         print("Optimization Finished!")
-        saver.save(sess, "velodyne_1th_try.ckpt")
+        saver.save(sess, "velodyne_2th_try.ckpt")
 
 def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
     # tf Graph input
@@ -223,10 +222,10 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         print objectness.shape, objectness.max(), objectness.min()
         # center = np.argmax(objectness)
         # print center
-        print np.where(objectness <= 1.3)
-        center = np.array([[89, 99, 9]])
-        prob = objectness[89, 99, 9]
-        print prob
+        print np.where(objectness >= 0.09)
+        center = np.array([[16, 64, 2]])
+        # prob = objectness[89, 99, 9]
+        # print prob
         pred_center = sphere_to_center(center, resolution=resolution)
         print pred_center
         # corners = cordinate[center].reshape(-1, 3)
@@ -335,12 +334,12 @@ def process(velodyne_path, label_path=None, calib_path=None, resolution=0.2, dat
         optimizer = create_optimizer(total_loss)
 
 if __name__ == '__main__':
-    # pcd_path = "/home/katou01/download/training/velodyne/*.bin"
-    # label_path = "/home/katou01/download/training/label_2/*.txt"
-    # calib_path = "/home/katou01/download/training/calib/*.txt"
-    # train(30, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    pcd_path = "/home/katou01/download/training/velodyne/*.bin"
+    label_path = "/home/katou01/download/training/label_2/*.txt"
+    calib_path = "/home/katou01/download/training/calib/*.txt"
+    train(30, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
 
-    pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
-    label_path = "/home/katou01/download/training/label_2/000700.txt"
-    calib_path = "/home/katou01/download/training/calib/000700.txt"
-    test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    # pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
+    # label_path = "/home/katou01/download/training/label_2/000700.txt"
+    # calib_path = "/home/katou01/download/training/calib/000700.txt"
+    # test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)

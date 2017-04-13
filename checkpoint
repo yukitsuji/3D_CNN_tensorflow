@@ -1,0 +1,2 @@
+model_checkpoint_path: "velodyne_1th_try.ckpt"
+all_model_checkpoint_paths: "velodyne_1th_try.ckpt"

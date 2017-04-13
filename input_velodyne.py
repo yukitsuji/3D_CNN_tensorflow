@@ -261,7 +261,6 @@ def corner_to_voxel(voxel_shape, corners, sphere_center):
     corner_voxel[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = corners
     return corner_voxel
 
-
 def create_objectness_label(sphere_center, resolution=0.5):
     obj_maps = np.zeros((int(90 / (resolution * 4)), int(100 / (resolution * 4)), int(10 / (resolution * 4))))
     obj_maps[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = 1
@@ -299,10 +298,12 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     p.append((0, 0, 0))
     p.append((0, 0, -1))
     print pc.shape
-    pc = np.vstack((pc, np.array([0, 0, -5, 0])))
-    pc = np.vstack((pc, np.array([0, 0, -4.9, 0])))
     print 1
     # publish_pc2(pc, obj)
+    a = center_to_sphere(places, size, resolution=0.25)
+    print places
+    print a
+    print sphere_to_center(a, resolution=0.25)
     publish_pc2(pc, corners.reshape(-1, 3))
 
 if __name__ == "__main__":
@@ -316,7 +317,7 @@ if __name__ == "__main__":
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
 
-    pcd_path = "../data/training/velodyne/000050.bin"
-    label_path = "../data/training/label_2/000050.txt"
-    calib_path = "../data/training/calib/000050.txt"
+    pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
+    label_path = "/home/katou01/download/training/label_2/000700.txt"
+    calib_path = "/home/katou01/download/training/calib/000700.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)

@@ -23,6 +23,7 @@ def train1(train_features, train_labels, valid_features, valid_labels, test_feat
             for i in range(total_batch):
                 batch_x, batch_y = train_features[i*batch_size : (i+1) * batch_size], train_labels[i*batch_size : (i+1) * batch_size]
                 sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, phase_train: True})
+                c = sess.run(cost, feed_dict={x: batch_x, y: batch_y})
                 print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(c))
             c = sess.run(cost, feed_dict={x: batch_x, y: batch_y})
             print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(c))
