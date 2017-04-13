@@ -304,7 +304,19 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     print places
     print a
     print sphere_to_center(a, resolution=0.25)
-    publish_pc2(pc, corners.reshape(-1, 3))
+    print sphere_to_center(np.array([24, 51, 2]), resolution=0.25)
+    a = np.array(
+        [[ 19.69109106, 8.70038319, -2.05356455],
+        [ 18.27717495, 5.61360097, -1.26570401],
+        [ 21.56218159, 8.64504647, -1.58700204],
+        [ 20.02987021, 8.84583879, -0.10549831],
+        [ 20.75653511, 8.11167407, 0.5703392 ],
+        [ 19.77633509, 5.56351113, -0.7579807 ],
+        [ 19.72957426, 5.75904274, -0.37826872],
+        [ 20.75458926, 5.8138907 , -0.41885149]]
+    )
+    print a.shape
+    publish_pc2(pc, a.reshape(-1, 3))
 
 if __name__ == "__main__":
     # pcd_path = "../data/training/velodyne/000012.pcd"

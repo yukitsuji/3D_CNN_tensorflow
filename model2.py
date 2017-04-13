@@ -208,7 +208,7 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         model, voxel = ssd_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
         # optimizer = create_optimizer(total_loss)
         saver = tf.train.Saver()
-        new_saver = tf.train.import_meta_graph("velodyne_1th_try.ckpt.meta")
+        new_saver = tf.train.import_meta_graph("velodyne_2th_try.ckpt.meta")
         last_model = tf.train.latest_checkpoint('./')
         # total_loss, g_map, g_cord = loss_func(model)
 
@@ -222,7 +222,7 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         print objectness.shape, objectness.max(), objectness.min()
         # center = np.argmax(objectness)
         # print center
-        print np.where(objectness >= 0.09)
+        print np.where(objectness >= 0.3)
         center = np.array([[16, 64, 2]])
         # prob = objectness[89, 99, 9]
         # print prob
@@ -334,12 +334,12 @@ def process(velodyne_path, label_path=None, calib_path=None, resolution=0.2, dat
         optimizer = create_optimizer(total_loss)
 
 if __name__ == '__main__':
-    pcd_path = "/home/katou01/download/training/velodyne/*.bin"
-    label_path = "/home/katou01/download/training/label_2/*.txt"
-    calib_path = "/home/katou01/download/training/calib/*.txt"
-    train(30, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    # pcd_path = "/home/katou01/download/training/velodyne/*.bin"
+    # label_path = "/home/katou01/download/training/label_2/*.txt"
+    # calib_path = "/home/katou01/download/training/calib/*.txt"
+    # train(30, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
 
-    # pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
-    # label_path = "/home/katou01/download/training/label_2/000700.txt"
-    # calib_path = "/home/katou01/download/training/calib/000700.txt"
-    # test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
+    label_path = "/home/katou01/download/training/label_2/000700.txt"
+    calib_path = "/home/katou01/download/training/calib/000700.txt"
+    test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)

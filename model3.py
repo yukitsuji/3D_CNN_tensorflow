@@ -90,7 +90,7 @@ def create_optimizer(all_loss):
 def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
     # tf Graph input
     batch_size = batch_num
-    training_epochs = 5
+    training_epochs = 15
 
     with tf.Session() as sess:
         model, voxel = ssd_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
@@ -153,7 +153,7 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         model, voxel = ssd_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
         # optimizer = create_optimizer(total_loss)
         saver = tf.train.Saver()
-        new_saver = tf.train.import_meta_graph("velodyne_1th_try.ckpt.meta")
+        new_saver = tf.train.import_meta_graph("velodyne_2th_try.ckpt.meta")
         last_model = tf.train.latest_checkpoint('./')
         # total_loss, g_map, g_cord = loss_func(model)
 
@@ -163,17 +163,20 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         cordinate = model.cordinate
 
         objectness = sess.run(objectness, feed_dict={voxel: voxel_x})[0, :, :, :, 0]
-        cordinate = sess.run(cordinate, feed_dict={voxel: voxel_x})
+        cordinate = sess.run(cordinate, feed_dict={voxel: voxel_x})[0]
         print objectness.shape, objectness.max(), objectness.min()
         # center = np.argmax(objectness)
         # print center
-        print np.where(objectness >= 0.09)
-        center = np.array([[16, 64, 2]])
+        print np.where(objectness >= 0.3)
+        center = np.array([20, 57, 3])
         # prob = objectness[89, 99, 9]
         # print prob
         pred_center = sphere_to_center(center, resolution=resolution)
         print pred_center
-        # corners = cordinate[center].reshape(-1, 3)
+        print cordinate.shape
+        corners = cordinate[center[0], center[1], center[2]].reshape(-1, 3)
+        pred_corners = corners + pred_center
+        print pred_corners
         # pred_corners = corners +
 
 def lidar_generator(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
