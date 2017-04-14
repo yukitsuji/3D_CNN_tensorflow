@@ -48,7 +48,7 @@ def conv3DLayer(input_layer, input_dim, output_dim, height, width, length, strid
         if activation:
             bias = activation(bias, name="activation")
         # bias = tf.contrib.layers.batch_norm(bias, data_format='NHWC', center=True, scale=True, is_training=is_training, scope="norm")
-        bias = batch_norm(bias, is_training)
+        # bias = batch_norm(bias, is_training)
     return bias
 
 def conv3DLayer_test(input_layer, input_dim, output_dim, height, width, length, stride, activation=tf.nn.relu, padding="SAME", name="", is_training=True):
@@ -268,7 +268,7 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         print y.shape, y.max(), y.min()
 
         print np.where(objectness >= 0.55)
-        index = np.where(y >= 1.0)
+        index = np.where(y >= 0.85)
         print np.vstack((index[0], np.vstack((index[1], index[2])))).transpose()
         # center = np.array([20, 57, 3])
         #
@@ -340,7 +340,7 @@ if __name__ == '__main__':
     calib_path = "../data/training/calib/*.txt"
     train(30, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
     #
-    # pcd_path = "../data/training/velodyne/000500.bin"
-    # label_path = "../data/training/label_2/000500.txt"
-    # calib_path = "../data/training/calib/000500.txt"
-    # test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    pcd_path = "../data/training/velodyne/000500.bin"
+    label_path = "../data/training/label_2/000500.txt"
+    calib_path = "../data/training/calib/000500.txt"
+    test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
