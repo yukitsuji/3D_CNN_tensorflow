@@ -234,7 +234,7 @@ def center_to_sphere(places, size, resolution=0.50):
     """from label center to sphere center"""
     # for 1/4 sphere
     center = places.copy()
-    center[:, 0] = center[:, 0] + size[:, 0] / 2.
+    center[:, 2] = center[:, 2] + size[:, 0] / 2.
     sphere_center = ((center - np.array([0., -50., -4.5])) / (resolution * 4)).astype(np.int32)
     return sphere_center
 
@@ -304,6 +304,7 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     print places
     print a
     print sphere_to_center(a, resolution=0.25)
+    bbox = sphere_to_center(a, resolution=0.25)
     # a = np.array(
     #     [[ 19.69109106, 8.70038319, -2.05356455],
     #     [ 18.27717495, 5.61360097, -1.26570401],
@@ -315,7 +316,8 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     #     [ 20.75458926, 5.8138907 , -0.41885149]]
     # )
     # print a.shape
-    publish_pc2(pc, a.reshape(-1, 3))
+    # publish_pc2(pc, bbox.reshape(-1, 3))
+    publish_pc2(pc, corners.reshape(-1, 3))
 
 if __name__ == "__main__":
     # pcd_path = "../data/training/velodyne/000012.pcd"
