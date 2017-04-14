@@ -289,7 +289,7 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
 
     corners = get_boxcorners(places, rotates, size)
     filter_car_data(corners)
-    print corners
+    # print corners
 
     pc = filter_camera_angle(pc)
     # obj = []
@@ -304,18 +304,17 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     print places
     print a
     print sphere_to_center(a, resolution=0.25)
-    print sphere_to_center(np.array([24, 51, 2]), resolution=0.25)
-    a = np.array(
-        [[ 19.69109106, 8.70038319, -2.05356455],
-        [ 18.27717495, 5.61360097, -1.26570401],
-        [ 21.56218159, 8.64504647, -1.58700204],
-        [ 20.02987021, 8.84583879, -0.10549831],
-        [ 20.75653511, 8.11167407, 0.5703392 ],
-        [ 19.77633509, 5.56351113, -0.7579807 ],
-        [ 19.72957426, 5.75904274, -0.37826872],
-        [ 20.75458926, 5.8138907 , -0.41885149]]
-    )
-    print a.shape
+    # a = np.array(
+    #     [[ 19.69109106, 8.70038319, -2.05356455],
+    #     [ 18.27717495, 5.61360097, -1.26570401],
+    #     [ 21.56218159, 8.64504647, -1.58700204],
+    #     [ 20.02987021, 8.84583879, -0.10549831],
+    #     [ 20.75653511, 8.11167407, 0.5703392 ],
+    #     [ 19.77633509, 5.56351113, -0.7579807 ],
+    #     [ 19.72957426, 5.75904274, -0.37826872],
+    #     [ 20.75458926, 5.8138907 , -0.41885149]]
+    # )
+    # print a.shape
     publish_pc2(pc, a.reshape(-1, 3))
 
 if __name__ == "__main__":
@@ -329,7 +328,7 @@ if __name__ == "__main__":
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
 
-    pcd_path = "/home/katou01/download/training/velodyne/000700.bin"
-    label_path = "/home/katou01/download/training/label_2/000700.txt"
-    calib_path = "/home/katou01/download/training/calib/000700.txt"
+    pcd_path = "../data/training/velodyne/000500.bin"
+    label_path = "../data/training/label_2/000500.txt"
+    calib_path = "../data/training/calib/000500.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)

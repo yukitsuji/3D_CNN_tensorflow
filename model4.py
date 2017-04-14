@@ -21,7 +21,7 @@ def conv3D_to_output(input_layer, input_dim, output_dim, height, width, length, 
     #[batch, 32, 32, 32, channel]
     with tf.variable_scope("conv3D" + name):
         kernel = tf.get_variable("weights", shape=[length, height, width, input_dim, output_dim], \
-            dtype=tf.float32, initializer=tf.truncated_normal_initializer(stddev=0.1))
+            dtype=tf.float32, initializer=tf.constant_initializer(0.01))
         conv = tf.nn.conv3d(input_layer, kernel, stride, padding=padding)
     return conv
 
@@ -33,8 +33,10 @@ class BNBLayer(object):
         self.layer1 = conv3DLayer(voxel, 1, 10, 5, 5, 5, [1, 2, 2, 2, 1], name="layer1", activation=activation)
         self.layer2 = conv3DLayer(self.layer1, 10, 20, 5, 5, 5, [1, 2, 2, 2, 1], name="layer2", activation=activation)
 
-        self.objectness = conv3D_to_output(self.layer2, 20, 1, 1, 1, 1, [1, 1, 1, 1, 1], name="objectness", activation=None)
+        self.objectness = conv3D_to_output(self.layer2, 20, 2, 1, 1, 1, [1, 1, 1, 1, 1], name="objectness", activation=None)
         self.cordinate = conv3D_to_output(self.layer2, 20, 24, 3, 3, 3, [1, 1, 1, 1, 1], name="cordinate", activation=None)
+
+        self.y = tf.nn.softmax(self.objectness, dim=-1)
 
 def ssd_model(sess, voxel_shape=(300, 300, 300),activation=tf.nn.relu):
     voxel = tf.placeholder(tf.float32, [None, voxel_shape[0], voxel_shape[1], voxel_shape[2], 1])
@@ -47,22 +49,24 @@ def ssd_model(sess, voxel_shape=(300, 300, 300),activation=tf.nn.relu):
     return bnb_model, voxel
 
 def loss_func(model):
-    # center = tf.placeholder(tf.float32, [batch_num, None, 3])
     g_map = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list()[:4])
     g_cord = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list())
     object_loss = tf.multiply(g_map, model.objectness[:, :, :, :, 0])
     non_gmap = tf.subtract(tf.ones_like(g_map, dtype=tf.float32), g_map)
     nonobject_loss = tf.multiply(non_gmap, model.objectness[:, :, :, :, 1])
     # sum_object_loss = tf.add(tf.exp(object_loss), tf.exp(nonobject_loss))
-    sum_object_loss = tf.exp(-tf.add(object_loss, nonobject_loss))
+    # sum_object_loss = tf.exp(-tf.add(object_loss, nonobject_loss))
+    sum_object_loss = tf.exp(-nonobject_loss)
     bunbo = tf.add(tf.exp(-model.objectness[:, :, :, :, 0]), tf.exp(-model.objectness[:, :, :, :, 1]))
-    obj_loss = 0.005 * tf.reduce_sum(-tf.log(tf.div(sum_object_loss, bunbo)))
+    # obj_loss = 0.005 * tf.reduce_sum(-tf.log(tf.div(sum_object_loss, bunbo)))
+    obj_loss = tf.reduce_sum(sum_object_loss)
+
 
     # g_cord   [batch, num, 24]
     # cord_loss  [batch, num, 24]
     cord_diff = tf.multiply(g_map, tf.reduce_sum(tf.square(tf.subtract(model.cordinate, g_cord)), 4))
     cord_loss = tf.reduce_sum(cord_diff)
-    return tf.add(obj_loss, cord_loss), g_map, g_cord
+    return obj_loss, obj_loss, cord_loss, g_map, g_cord
 
 def loss_func2(model):
     g_map = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list()[:4])
@@ -75,12 +79,20 @@ def loss_func2(model):
 
 def loss_func3(model):
     g_map = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list()[:4])
+    g_cord = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list())
+    non_gmap = tf.subtract(tf.ones_like(g_map, dtype=tf.float32), g_map)
 
+    elosion = 0.00001
+    y = tf.nn.softmax(model.objectness + elosion, dim=-1)
+    cross_entropy = -tf.reduce_sum(g_map * tf.log(y[:, :, :, :, 0]) + 0.00005 * non_gmap * tf.log(y[:, :, :, :, 1]))
+    obj_loss = cross_entropy
+    # b = tf.div(tf.exp(a), tf.reduce_sum(tf.exp(a), -1))
+    # b = tf.exp(a) / tf.expand_dims(tf.reduce_sum(tf.exp(a), -1), 4)
 
     g_cord = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list())
     cord_diff = tf.multiply(g_map, tf.reduce_sum(tf.square(tf.subtract(model.cordinate, g_cord)), 4))
-    cord_loss = tf.reduce_sum(cord_diff) * 0.1
-    return tf.add(obj_loss, cord_loss), g_map, g_cord
+    cord_loss = tf.reduce_sum(cord_diff) * 0.025
+    return tf.add(obj_loss, cord_loss), obj_loss, cord_loss, g_map, g_cord, y
 
 def create_optimizer(all_loss):
     opt = tf.train.AdamOptimizer(0.001)
@@ -90,12 +102,12 @@ def create_optimizer(all_loss):
 def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
     # tf Graph input
     batch_size = batch_num
-    training_epochs = 15
+    training_epochs = 10
 
     with tf.Session() as sess:
         model, voxel = ssd_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
         saver = tf.train.Saver()
-        total_loss, g_map, g_cord = loss_func2(model)
+        total_loss, obj_loss, cord_loss, g_map, g_cord, y = loss_func3(model)
         optimizer = create_optimizer(total_loss)
         init = tf.global_variables_initializer()
 
@@ -105,13 +117,16 @@ def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution
             # total_batch = int(len(train_features)/batch_size)
             for (batch_x, batch_g_map, batch_g_cord) in lidar_generator(batch_num, velodyne_path, label_path=label_path, \
                calib_path=calib_path,resolution=resolution, dataformat=dataformat, label_type=label_type, is_velo_cam=is_velo_cam):
+                print batch_x.shape, batch_g_map.shape, batch_g_cord.shape, batch_num
                 sess.run(optimizer, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord})
 
                 c = sess.run(total_loss, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord})
+                # soft = sess.run(y, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord})
+                # print soft[0, 0, 0, 0, :]
                 print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(c))
 
         print("Optimization Finished!")
-        saver.save(sess, "velodyne_2th_try.ckpt")
+        saver.save(sess, "velodyne_4th_try.ckpt")
 
 def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
     # tf Graph input
@@ -153,7 +168,7 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         model, voxel = ssd_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
         # optimizer = create_optimizer(total_loss)
         saver = tf.train.Saver()
-        new_saver = tf.train.import_meta_graph("velodyne_2th_try.ckpt.meta")
+        new_saver = tf.train.import_meta_graph("velodyne_4th_try.ckpt.meta")
         last_model = tf.train.latest_checkpoint('./')
         # total_loss, g_map, g_cord = loss_func(model)
 
@@ -161,23 +176,25 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
 
         objectness = model.objectness
         cordinate = model.cordinate
+        y = model.y
 
         objectness = sess.run(objectness, feed_dict={voxel: voxel_x})[0, :, :, :, 0]
         cordinate = sess.run(cordinate, feed_dict={voxel: voxel_x})[0]
+        y = sess.run(y, feed_dict={voxel: voxel_x})[0, :, :, :, 0]
         print objectness.shape, objectness.max(), objectness.min()
-        # center = np.argmax(objectness)
-        # print center
-        print np.where(objectness >= 0.3)
-        center = np.array([20, 57, 3])
-        # prob = objectness[89, 99, 9]
-        # print prob
-        pred_center = sphere_to_center(center, resolution=resolution)
-        print pred_center
-        print cordinate.shape
-        corners = cordinate[center[0], center[1], center[2]].reshape(-1, 3)
-        pred_corners = corners + pred_center
-        print pred_corners
-        # pred_corners = corners +
+        print y.shape, y.max(), y.min()
+
+        print np.where(objectness >= 9)
+        value =  np.where(y >= 0.9)
+        print np.vstack((value[0], np.vstack((value[1], value[2])))).transpose()
+        # center = np.array([20, 57, 3])
+        #
+        # pred_center = sphere_to_center(center, resolution=resolution)
+        # print pred_center
+        # print cordinate.shape
+        # corners = cordinate[center[0], center[1], center[2]].reshape(-1, 3)
+        # pred_corners = corners + pred_center
+        # print pred_corners
 
 def lidar_generator(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
     velodynes_path = glob.glob(velodyne_path)
@@ -282,12 +299,12 @@ def process(velodyne_path, label_path=None, calib_path=None, resolution=0.2, dat
         optimizer = create_optimizer(total_loss)
 
 if __name__ == '__main__':
-    # pcd_path = "../data/training/velodyne/*.bin"
-    # label_path = "../data/training/label_2/*.txt"
-    # calib_path = "../data/training/calib/*.txt"
-    # train(30, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    pcd_path = "../data/training/velodyne/*.bin"
+    label_path = "../data/training/label_2/*.txt"
+    calib_path = "../data/training/calib/*.txt"
+    train(50, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
 
-    pcd_path = "../data/training/velodyne/000500.bin"
-    label_path = "../data/training/label_2/000500.txt"
-    calib_path = "../data/training/calib/000500.txt"
-    test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    # pcd_path = "../data/training/velodyne/000500.bin"
+    # label_path = "../data/training/label_2/000500.txt"
+    # calib_path = "../data/training/calib/000500.txt"
+    # test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
