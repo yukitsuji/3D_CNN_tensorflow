@@ -123,15 +123,7 @@ def loss_func(model):
 def loss_func2(model):
     g_map = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list()[:4])
     obj_loss = tf.reduce_sum(tf.square(tf.subtract(model.objectness[:, :, :, :, 0], g_map)))
-    # object_loss = tf.multiply(g_map, model.objectness[:, :, :, :, 0])
-    # non_gmap = tf.subtract(tf.ones_like(g_map, dtype=tf.float32), g_map)
-    # nonobject_loss = tf.multiply(non_gmap, model.objectness[:, :, :, :, 1])
-    # sum_object_loss = tf.exp(-tf.add(object_loss, nonobject_loss))
-    # bunbo = tf.add(tf.exp(-model.objectness[:, :, :, :, 0]), tf.exp(-model.objectness[:, :, :, :, 1]))
-    # obj_loss = 0.005 * tf.reduce_sum(-tf.log(tf.div(sum_object_loss, bunbo)))
 
-    # g_cord   [batch, num, 24]
-    # cord_loss  [batch, num, 24]
     g_cord = tf.placeholder(tf.float32, model.cordinate.get_shape().as_list())
     cord_diff = tf.multiply(g_map, tf.reduce_sum(tf.square(tf.subtract(model.cordinate, g_cord)), 4))
     cord_loss = tf.reduce_sum(cord_diff) * 0.1

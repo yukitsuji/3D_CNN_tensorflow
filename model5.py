@@ -318,9 +318,7 @@ def lidar_generator(batch_num, velodyne_path, label_path=None, calib_path=None, 
                     continue
 
             corners = get_boxcorners(places, rotates, size)
-            filter_car_data(corners)
             pc = filter_camera_angle(pc)
-
             voxel =  raw_to_voxel(pc, resolution=resolution)
             center_sphere = center_to_sphere(places, size, resolution=resolution)
             corner_label = corner_to_train(corners, center_sphere, resolution=resolution)

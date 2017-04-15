@@ -251,7 +251,7 @@ def voxel_to_corner(corner_vox, resolution, center):#TODO
 def corner_to_train(corners, sphere_center, resolution=0.50):
     """compare original corners  and  sphere centers"""
     train_corners = corners.copy()
-    sphere_center = sphere_to_center(sphere_center, resolution=resolution)
+    sphere_center = sphere_to_center(sphere_center, resolution=resolution) #sphere to center
     for index, (corner, center) in enumerate(zip(corners, sphere_center)):
         train_corners[index] = corner - center
     return train_corners
@@ -288,9 +288,6 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
         places, rotates, size = read_labels(label_path, label_type, calib_path=calib_path, is_velo_cam=is_velo_cam, proj_velo=proj_velo)
 
     corners = get_boxcorners(places, rotates, size)
-    filter_car_data(corners)
-    # print corners
-
     pc = filter_camera_angle(pc)
     # obj = []
     # obj = create_publish_obj(obj, places, rotates, size)
@@ -330,7 +327,7 @@ if __name__ == "__main__":
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
 
-    pcd_path = "../data/training/velodyne/000500.bin"
-    label_path = "../data/training/label_2/000500.txt"
-    calib_path = "../data/training/calib/000500.txt"
+    pcd_path = "../data/training/velodyne/000001.bin"
+    label_path = "../data/training/label_2/000001.txt"
+    calib_path = "../data/training/calib/000001.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
