@@ -27,6 +27,9 @@ def convert_xyz_to_2d(places):
     plt.hist(phi)
     plt.show()
 
+def bird_view(places):
+    pass
+
 def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", label_type="txt", is_velo_cam=False):
     p = []
     pc = None

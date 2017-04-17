@@ -327,7 +327,7 @@ if __name__ == "__main__":
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
 
-    pcd_path = "../data/training/velodyne/000001.bin"
-    label_path = "../data/training/label_2/000001.txt"
-    calib_path = "../data/training/calib/000001.txt"
+    pcd_path = "../data/training/velodyne/000400.bin"
+    label_path = "../data/training/label_2/000400.txt"
+    calib_path = "../data/training/calib/000400.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
