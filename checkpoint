@@ -1,2 +1,5 @@
-model_checkpoint_path: "velodyne_1th_try.ckpt"
-all_model_checkpoint_paths: "velodyne_1th_try.ckpt"
+model_checkpoint_path: "velodyne_6th_try_20.ckpt"
+all_model_checkpoint_paths: "velodyne_6th_try_5.ckpt"
+all_model_checkpoint_paths: "velodyne_6th_try_10.ckpt"
+all_model_checkpoint_paths: "velodyne_6th_try_15.ckpt"
+all_model_checkpoint_paths: "velodyne_6th_try_20.ckpt"
