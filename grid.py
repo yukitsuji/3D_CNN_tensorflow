@@ -162,7 +162,7 @@ def create_optimizer(all_loss, lr=0.001):
 def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False):
     # tf Graph input
     batch_size = batch_num
-    training_epochs = 61
+    training_epochs = 101
 
     with tf.Session() as sess:
         model, voxel, phase_train = ssd_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
@@ -192,7 +192,7 @@ def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution
                 print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(nol))
                 # print ""
 
-            if (epoch != 0) and (epoch % 5 == 0):
+            if (epoch != 0) and (epoch % 10 == 0):
                 print "Save epoch " + str(epoch)
                 saver.save(sess, "velodyne_10th_try_" + str(epoch) + ".ckpt")
         print("Optimization Finished!")
