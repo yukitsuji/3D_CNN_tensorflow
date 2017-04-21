@@ -80,15 +80,15 @@ class BNBLayer(object):
         pass
 
     def build_graph(self, voxel, activation=tf.nn.relu, is_training=True):
-        self.layer1 = conv3DLayer(voxel, 1, 8, 5, 5, 5, [1, 2, 2, 2, 1], name="layer1", activation=activation, is_training=is_training)
-        self.layer2 = conv3DLayer(self.layer1, 8, 16, 5, 5, 5, [1, 2, 2, 2, 1], name="layer2", activation=activation, is_training=is_training)
-        self.layer3 = conv3DLayer(self.layer2, 16, 16, 3, 3, 3, [1, 2, 2, 2, 1], name="layer3", activation=activation, is_training=is_training)
-        # self.layer4 = conv3DLayer(self.layer3, 16, 16, 3, 3, 3, [1, 2, 2, 2, 1], name="layer4", activation=activation, is_training=is_training)
+        self.layer1 = conv3DLayer(voxel, 1, 10, 5, 5, 5, [1, 2, 2, 2, 1], name="layer1", activation=activation, is_training=is_training)
+        self.layer2 = conv3DLayer(self.layer1, 10, 16, 5, 5, 5, [1, 2, 2, 2, 1], name="layer2", activation=activation, is_training=is_training)
+        self.layer3 = conv3DLayer(self.layer2, 16, 32, 3, 3, 3, [1, 2, 2, 2, 1], name="layer3", activation=activation, is_training=is_training)
+        # self.layer4 = conv3DLayer(self.layer3, 32, 32, 3, 3, 3, [1, 2, 2, 2, 1], name="layer4", activation=activation, is_training=is_training)
         # base_shape = self.layer3.get_shape().as_list()
         # obj_output_shape = [tf.shape(self.layer4)[0], base_shape[1], base_shape[2], base_shape[3], 2]
         # cord_output_shape = [tf.shape(self.layer4)[0], base_shape[1], base_shape[2], base_shape[3], 24]
-        self.objectness = conv3D_to_output(self.layer3, 16, 2, 1, 1, 1, [1, 1, 1, 1, 1], name="objectness", activation=None)
-        self.cordinate = conv3D_to_output(self.layer3, 16, 24, 1, 1, 1, [1, 1, 1, 1, 1], name="cordinate", activation=None)
+        self.objectness = conv3D_to_output(self.layer3, 32, 2, 1, 1, 1, [1, 1, 1, 1, 1], name="objectness", activation=None)
+        self.cordinate = conv3D_to_output(self.layer3, 32, 24, 1, 1, 1, [1, 1, 1, 1, 1], name="cordinate", activation=None)
         # self.objectness = deconv3D_to_output(self.layer4, 32, 2, 3, 3, 3, [1, 2, 2, 2, 1], obj_output_shape, name="objectness", activation=None)
         # self.cordinate = deconv3D_to_output(self.layer4, 32, 24, 3, 3, 3, [1, 2, 2, 2, 1], cord_output_shape, name="cordinate", activation=None)
         self.y = tf.nn.softmax(self.objectness, dim=-1)
