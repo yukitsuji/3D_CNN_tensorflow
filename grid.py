@@ -237,10 +237,15 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         model, voxel, phase_train = ssd_test_model(sess, voxel_shape=(360, 400, 40), activation=tf.nn.relu)
         # optimizer = create_optimizer(total_loss)
         saver = tf.train.Saver()
+<<<<<<< HEAD
         new_saver = tf.train.import_meta_graph("velodyne_10th_try_100.ckpt.meta")
         # last_model = tf.train.latest_checkpoint('./velodyne_10th_try_100.ckpt')
         last_model = "./velodyne_10th_try_90.ckpt"
         print last_model
+=======
+        new_saver = tf.train.import_meta_graph("velodyne_10th_try_5.ckpt.meta")
+        last_model = tf.train.latest_checkpoint('./')
+>>>>>>> 6929277e0bc5cb643c5dbf2f5d9710b944543015
         # total_loss, g_map, g_cord = loss_func(model)
 
         saver.restore(sess, last_model)
@@ -255,6 +260,7 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         print objectness.shape, objectness.max(), objectness.min()
         print y.shape, y.max(), y.min()
 
+<<<<<<< HEAD
         # print np.where(objectness >= 0.55)
         index = np.where(y >= 0.995)
         print np.vstack((index[0], np.vstack((index[1], index[2])))).transpose()
@@ -262,17 +268,26 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
 
         a = center_to_sphere(places, size, resolution=0.25)
         print a[a[:, 0].argsort()]
+=======
+        print np.where(objectness >= 0.55)
+        index = np.where(y >= 0.95)
+        print np.vstack((index[0], np.vstack((index[1], index[2])))).transpose()
+        print np.vstack((index[0], np.vstack((index[1], index[2])))).transpose().shape
+>>>>>>> 6929277e0bc5cb643c5dbf2f5d9710b944543015
         # center = np.array([20, 57, 3])
         #
         # pred_center = sphere_to_center(center, resolution=resolution)
         # print pred_center
         # print cordinate.shape
         # corners = cordinate[center[0], center[1], center[2]].reshape(-1, 3)
+<<<<<<< HEAD
         centers = np.vstack((index[0], np.vstack((index[1], index[2])))).transpose()
         centers = sphere_to_center(centers, resolution=0.25)
         corners = cordinate[index].reshape(-1, 8, 3) + centers[:, np.newaxis]
         print corners.shape
         publish_pc2(pc, corners.reshape(-1, 3))
+=======
+>>>>>>> 6929277e0bc5cb643c5dbf2f5d9710b944543015
         # pred_corners = corners + pred_center
         # print pred_corners
 
@@ -332,6 +347,7 @@ def lidar_generator(batch_num, velodyne_path, label_path=None, calib_path=None, 
 
 
 if __name__ == '__main__':
+<<<<<<< HEAD
     # pcd_path = "../data/training/velodyne/*.bin"
     # label_path = "../data/training/label_2/*.txt"
     # calib_path = "../data/training/calib/*.txt"
@@ -341,3 +357,14 @@ if __name__ == '__main__':
     label_path = "../data/training/label_2/006000.txt"
     calib_path = "../data/training/calib/006000.txt"
     test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+=======
+    pcd_path = "../data/training/velodyne/*.bin"
+    label_path = "../data/training/label_2/*.txt"
+    calib_path = "../data/training/calib/*.txt"
+    train(20, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+    #
+    # pcd_path = "../data/training/velodyne/000400.bin"
+    # label_path = "../data/training/label_2/000400.txt"
+    # calib_path = "../data/training/calib/000400.txt"
+    # test(1, pcd_path, label_path=label_path, resolution=0.25, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
+>>>>>>> 6929277e0bc5cb643c5dbf2f5d9710b944543015
