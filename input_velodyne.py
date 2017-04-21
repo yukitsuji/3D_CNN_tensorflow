@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 import pcl
 import glob
+import math
 import std_msgs.msg
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
@@ -65,7 +66,7 @@ def read_label_from_txt(label_path):
             if (label[0] == "DontCare"):
                 continue
 
-            if label[0] == ("Car" or "Van" or "Truck"):
+            if label[0] == ("Car" or "Van"): #  or "Truck"
                 bounding_box.append(label[8:15])
 
     if bounding_box:
@@ -220,27 +221,31 @@ def publish_pc2(pc, obj):
         pub2.publish(points2)
         r.sleep()
 
-def raw_to_voxel(pc, resolution=0.50):
-    logic_x = np.logical_and(pc[:, 0] >= 0, pc[:, 0] <90)
-    logic_y = np.logical_and(pc[:, 1] >= -50, pc[:, 1] < 50)
-    logic_z = np.logical_and(pc[:, 2] >= -4.5, pc[:, 2] < 5.5)
+def raw_to_voxel(pc, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
+    logic_x = np.logical_and(pc[:, 0] >= x[0], pc[:, 0] < x[1])
+    logic_y = np.logical_and(pc[:, 1] >= y[0], pc[:, 1] < y[1])
+    logic_z = np.logical_and(pc[:, 2] >= z[0], pc[:, 2] < z[1])
     pc = pc[:, :3][np.logical_and(logic_x, np.logical_and(logic_y, logic_z))]
-    pc =((pc - np.array([0., -50., -4.5])) / resolution).astype(np.int32)
-    voxel = np.zeros((int(90 / resolution), int(100 / resolution), int(10 / resolution)))
+    pc =((pc - np.array([x[0], y[0], z[0]])) / resolution).astype(np.int32)
+    voxel = np.zeros((int((x[1] - x[0]) / resolution), int((y[1] - y[0]) / resolution), int(round((z[1]-z[0]) / resolution))))
     voxel[pc[:, 0], pc[:, 1], pc[:, 2]] = 1
     return voxel
 
-def center_to_sphere(places, size, resolution=0.50):
+def center_to_sphere(places, size, resolution=0.50, min_value=np.array([0., -50., -4.5]), scale=4, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
     """from label center to sphere center"""
     # for 1/4 sphere
+    x_logical = np.logical_and((places[:, 0] < x[1]), (places[:, 0] >= x[0]))
+    y_logical = np.logical_and((places[:, 1] < y[1]), (places[:, 1] >= y[0]))
+    z_logical = np.logical_and((places[:, 2] < z[1]), (places[:, 2] >= z[0]))
+    xyz_logical = np.logical_and(x_logical, np.logical_and(y_logical, z_logical))
     center = places.copy()
     center[:, 2] = center[:, 2] + size[:, 0] / 2.
-    sphere_center = ((center - np.array([0., -50., -4.5])) / (resolution * 4)).astype(np.int32)
+    sphere_center = ((center[xyz_logical] - min_value) / (resolution * scale)).astype(np.int32)
     return sphere_center
 
-def sphere_to_center(p_sphere, resolution=0.5):
+def sphere_to_center(p_sphere, resolution=0.5, scale=4, min_value=np.array([0., -50., -4.5])):
     """from sphere center to label center"""
-    center = p_sphere * (resolution*4) + np.array([0., -50., -4.5])
+    center = p_sphere * (resolution*scale) + min_value
     return center
 
 def voxel_to_corner(corner_vox, resolution, center):#TODO
@@ -248,21 +253,40 @@ def voxel_to_corner(corner_vox, resolution, center):#TODO
     corners = center + corner_vox
     return corners
 
-def corner_to_train(corners, sphere_center, resolution=0.50):
+def create_label(places, size, corners, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5), scale=4, min_value=np.array([0., -50., -4.5])):
+    x_logical = np.logical_and((places[:, 0] < x[1]), (places[:, 0] >= x[0]))
+    y_logical = np.logical_and((places[:, 1] < y[1]), (places[:, 1] >= y[0]))
+    z_logical = np.logical_and((places[:, 2] + size[:, 0]/2. < z[1]), (places[:, 2] + size[:, 0]/2. >= z[0]))
+    xyz_logical = np.logical_and(x_logical, np.logical_and(y_logical, z_logical))
+    center = places.copy()
+    center[:, 2] = center[:, 2] + size[:, 0] / 2.
+    sphere_center = ((center[xyz_logical] - min_value) / (resolution * scale)).astype(np.int32)
+
+    train_corners = corners[xyz_logical].copy()
+    anchor_center = sphere_to_center(sphere_center, resolution=resolution, scale=scale, min_value=min_value) #sphere to center
+    for index, (corner, center) in enumerate(zip(corners[xyz_logical], anchor_center)):
+        train_corners[index] = corner - center
+    return sphere_center, train_corners
+
+def corner_to_train(corners, sphere_center, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5), scale=4, min_value=np.array([0., -50., -4.5])):
     """compare original corners  and  sphere centers"""
-    train_corners = corners.copy()
-    sphere_center = sphere_to_center(sphere_center, resolution=resolution) #sphere to center
-    for index, (corner, center) in enumerate(zip(corners, sphere_center)):
+    x_logical = np.logical_and((corners[:, :, 0] < x[1]), (corners[:, :, 0] >= x[0]))
+    y_logical = np.logical_and((corners[:, :, 1] < y[1]), (corners[:, :, 1] >= y[0]))
+    z_logical = np.logical_and((corners[:, :, 2] < z[1]), (corners[:, :, 2] >= z[0]))
+    xyz_logical = np.logical_and(x_logical, np.logical_and(y_logical, z_logical)).all(axis=1)
+    train_corners = corners[xyz_logical].copy()
+    sphere_center = sphere_to_center(sphere_center, resolution=resolution, scale=scale, min_value=min_value) #sphere to center
+    for index, (corner, center) in enumerate(zip(corners[xyz_logical], sphere_center)):
         train_corners[index] = corner - center
     return train_corners
 
-def corner_to_voxel(voxel_shape, corners, sphere_center):
-    corner_voxel = np.zeros((voxel_shape[0] / 4, voxel_shape[1] / 4, voxel_shape[2] /4, 24))
+def corner_to_voxel(voxel_shape, corners, sphere_center, scale=4):
+    corner_voxel = np.zeros((voxel_shape[0] / scale, voxel_shape[1] / scale, voxel_shape[2] / scale, 24))
     corner_voxel[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = corners
     return corner_voxel
 
-def create_objectness_label(sphere_center, resolution=0.5):
-    obj_maps = np.zeros((int(90 / (resolution * 4)), int(100 / (resolution * 4)), int(10 / (resolution * 4))))
+def create_objectness_label(sphere_center, resolution=0.5, x=90, y=100, z=10, scale=4):
+    obj_maps = np.zeros((int(x / (resolution * scale)), int(y / (resolution * scale)), int(round(z / (resolution * scale)))))
     obj_maps[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = 1
     return obj_maps
 
@@ -302,6 +326,7 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     print a
     print sphere_to_center(a, resolution=0.25)
     bbox = sphere_to_center(a, resolution=0.25)
+    print corners.shape
     # a = np.array(
     #     [[ 19.69109106, 8.70038319, -2.05356455],
     #     [ 18.27717495, 5.61360097, -1.26570401],
@@ -327,7 +352,7 @@ if __name__ == "__main__":
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
 
-    pcd_path = "../data/training/velodyne/000400.bin"
-    label_path = "../data/training/label_2/000400.txt"
-    calib_path = "../data/training/calib/000400.txt"
+    pcd_path = "../data/training/velodyne/000410.bin"
+    label_path = "../data/training/label_2/000410.txt"
+    calib_path = "../data/training/calib/000410.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
