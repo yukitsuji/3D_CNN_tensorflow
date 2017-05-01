@@ -152,17 +152,18 @@ def create_optimizer(all_loss, lr=0.001):
     optimizer = opt.minimize(all_loss)
     return optimizer
 
-def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False, \
-        scale=4, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5)):
+def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, \
+        dataformat="pcd", label_type="txt", is_velo_cam=False, scale=4, lr=0.01, \
+        voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5), epoch=101):
     # tf Graph input
     batch_size = batch_num
-    training_epochs = 101
+    training_epochs = epoch
 
     with tf.Session() as sess:
         model, voxel, phase_train = ssd_model(sess, voxel_shape=voxel_shape, activation=tf.nn.relu, is_training=True)
         saver = tf.train.Saver()
         total_loss, obj_loss, cord_loss, is_obj_loss, non_obj_loss, g_map, g_cord, y_pred = loss_func3(model)
-        optimizer = create_optimizer(total_loss, lr=0.01)
+        optimizer = create_optimizer(total_loss, lr=lr)
         init = tf.global_variables_initializer()
         sess.run(init)
 
@@ -175,14 +176,11 @@ def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution
                 # print batch_g_map.shape
                 # print batch_g_cord.shape
                 sess.run(optimizer, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord, phase_train:True})
-
                 # ct = sess.run(total_loss, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord, phase_train:True})
                 # co = sess.run(obj_loss, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord, phase_train:True})
                 cc = sess.run(cord_loss, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord, phase_train:True})
                 iol = sess.run(is_obj_loss, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord, phase_train:True})
                 nol = sess.run(non_obj_loss, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord, phase_train:True})
-                # soft = sess.run(y, feed_dict={voxel: batch_x, g_map: batch_g_map, g_cord: batch_g_cord})
-                # print soft[0, 0, 0, 0, :]
                 # print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(ct))
                 # print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(co))
                 print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(cc))
@@ -193,11 +191,9 @@ def train(batch_num, velodyne_path, label_path=None, calib_path=None, resolution
                 saver.save(sess, "velodyne_025_deconv_norm_valid" + str(epoch) + ".ckpt")
         print("Optimization Finished!")
 
-def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False, \
+def train_test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False, \
              scale=4, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5)):
-    # tf Graph input
-    batch_size = batch_num # 1
-    training_epochs = 5
+    batch_size = batch_num
     p = []
     pc = None
     bounding_boxes = None
@@ -234,8 +230,8 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         is_training=None
         model, voxel, phase_train = ssd_model(sess, voxel_shape=voxel_shape, activation=tf.nn.relu, is_training=is_training)
         saver = tf.train.Saver()
-        new_saver = tf.train.import_meta_graph("velodyne_025_deconv_norm_valid0.ckpt.meta")
-        last_model = "./velodyne_025_deconv_norm_valid0.ckpt"
+        new_saver = tf.train.import_meta_graph("velodyne_025_deconv_norm_valid40.ckpt.meta")
+        last_model = "./velodyne_025_deconv_norm_valid40.ckpt"
         saver.restore(sess, last_model)
 
         objectness = model.objectness
@@ -271,7 +267,59 @@ def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=
         print corners.shape
         print voxel.shape
         # publish_pc2(pc, corners.reshape(-1, 3))
-        publish_pc2(pc, label_corners.reshape(-1, 3))
+        publish_pc2(pc, corners.reshape(-1, 3))
+        # pred_corners = corners + pred_center
+        # print pred_corners
+
+def test(batch_num, velodyne_path, label_path=None, calib_path=None, resolution=0.2, dataformat="pcd", label_type="txt", is_velo_cam=False, \
+             scale=4, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5)):
+    batch_size = batch_num
+    p = []
+    pc = None
+    bounding_boxes = None
+    places = None
+    rotates = None
+    size = None
+    proj_velo = None
+
+    if dataformat == "bin":
+        pc = load_pc_from_bin(velodyne_path)
+    elif dataformat == "pcd":
+        pc = load_pc_from_pcd(velodyne_path)
+
+    pc = filter_camera_angle(pc)
+    voxel =  raw_to_voxel(pc, resolution=resolution, x=x, y=y, z=z)
+    voxel_x = voxel.reshape(1, voxel.shape[0], voxel.shape[1], voxel.shape[2], 1)
+
+    with tf.Session() as sess:
+        is_training=None
+        model, voxel, phase_train = ssd_model(sess, voxel_shape=voxel_shape, activation=tf.nn.relu, is_training=is_training)
+        saver = tf.train.Saver()
+        new_saver = tf.train.import_meta_graph("velodyne_025_deconv_norm_valid40.ckpt.meta")
+        last_model = "./velodyne_025_deconv_norm_valid40.ckpt"
+        saver.restore(sess, last_model)
+
+        objectness = model.objectness
+        cordinate = model.cordinate
+        y_pred = model.y
+        objectness = sess.run(objectness, feed_dict={voxel: voxel_x})[0, :, :, :, 0]
+        cordinate = sess.run(cordinate, feed_dict={voxel: voxel_x})[0]
+        y_pred = sess.run(y_pred, feed_dict={voxel: voxel_x})[0, :, :, :, 0]
+        print objectness.shape, objectness.max(), objectness.min()
+        print y_pred.shape, y_pred.max(), y_pred.min()
+
+        index = np.where(y_pred >= 0.995)
+        print np.vstack((index[0], np.vstack((index[1], index[2])))).transpose()
+        print np.vstack((index[0], np.vstack((index[1], index[2])))).transpose().shape
+
+        centers = np.vstack((index[0], np.vstack((index[1], index[2])))).transpose()
+        centers = sphere_to_center(centers, resolution=resolution, \
+            scale=scale, min_value=np.array([x[0], y[0], z[0]]))
+        corners = cordinate[index].reshape(-1, 8, 3) + centers[:, np.newaxis]
+        print corners.shape
+        print voxel.shape
+        # publish_pc2(pc, corners.reshape(-1, 3))
+        publish_pc2(pc, corners.reshape(-1, 3))
         # pred_corners = corners + pred_center
         # print pred_corners
 
@@ -339,14 +387,22 @@ def lidar_generator(batch_num, velodyne_path, label_path=None, calib_path=None, 
 
 
 if __name__ == '__main__':
-    pcd_path = "../data/training/velodyne/*.bin"
-    label_path = "../data/training/label_2/*.txt"
-    calib_path = "../data/training/calib/*.txt"
-    train(5, pcd_path, label_path=label_path, resolution=0.1, calib_path=calib_path, dataformat="bin", is_velo_cam=True, \
-            scale=8, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5))
-    #
-    # pcd_path = "../data/training/velodyne/006000.bin"
-    # label_path = "../data/training/label_2/006000.txt"
-    # calib_path = "../data/training/calib/006000.txt"
-    # test(1, pcd_path, label_path=label_path, resolution=0.1, calib_path=calib_path, dataformat="bin", is_velo_cam=True, \
+    # pcd_path = "../data/training/velodyne/*.bin"
+    # label_path = "../data/training/label_2/*.txt"
+    # calib_path = "../data/training/calib/*.txt"
+    # train(5, pcd_path, label_path=label_path, resolution=0.1, calib_path=calib_path, dataformat="bin", is_velo_cam=True, \
     #         scale=8, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5))
+    #
+    # pcd_path = "../data/training/velodyne/005000.bin"
+    # label_path = "../data/training/label_2/005000.txt"
+    # calib_path = "../data/training/calib/005000.txt"
+    # pcd_path = "../data/testing/velodyne/005000.bin"
+    # label_path = "../data/testing/label_2/005000.txt"
+    # calib_path = "../data/testing/calib/005000.txt"
+    # train_test(1, pcd_path, label_path=label_path, resolution=0.1, calib_path=calib_path, dataformat="bin", is_velo_cam=True, \
+    #         scale=8, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5))
+
+    pcd_path = "../data/testing/velodyne/002397.bin"
+    calib_path = "../data/testing/calib/002397.txt"
+    test(1, pcd_path, label_path=None, resolution=0.1, calib_path=calib_path, dataformat="bin", is_velo_cam=True, \
+            scale=8, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5))
