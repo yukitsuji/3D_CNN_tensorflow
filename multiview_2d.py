@@ -17,11 +17,22 @@ import matplotlib.pyplot as plt
 
 def convert_xyz_to_2d(places):
     theta = np.arctan2(places[:, 1], places[:, 0])
+    ave_theta = np.average(theta)
     phi = np.arctan2(places[:, 2], np.sqrt(places[:, 0]**2 + places[:, 1]**2))
-    r = (theta / 0.08).astype(np.int32)
-    c = (phi / 0.05).astype(np.int32)
-    print places.max(axis=0)
-    print phi.min(), phi.max()
+    ave_phi = np.average(phi)
+    r = (theta / ave_theta).astype(np.int32)
+    c = (phi / ave_phi).astype(np.int32)
+    print "places", places.shape
+    print np.max(places, axis=0)
+    print np.min(places, axis=0)
+    print "theta", theta.shape
+    print theta.max(axis=0)
+    print theta.min(axis=0)
+    print ave_theta
+    print "phi", phi.shape
+    print phi.min()
+    print phi.max()
+    print ave_phi
     # print np.sqrt(np.sum(places ** 2, axis=1)).shape
     print r.max(), r.min(), c.max(), c.min()
     plt.hist(phi)
@@ -76,7 +87,7 @@ if __name__ == "__main__":
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
 
-    pcd_path = "../data/training/velodyne/000080.bin"
-    label_path = "../data/training/label_2/000080.txt"
-    calib_path = "../data/training/calib/000080.txt"
+    pcd_path = "/home/katou01/download/training/velodyne/005080.bin"
+    label_path = "/home/katou01/download/training/label_2/005080.txt"
+    calib_path = "/home/katou01/download/training/calib/005080.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
