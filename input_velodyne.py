@@ -10,17 +10,10 @@ import math
 import std_msgs.msg
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
-# from cv_bridge import CvBridge
 from parse_xml import parseXML
 
-"""
-TODO
-1. Only get Car Label and Data
-2. get by batch data and label
-3. learning by 3D CNN
-4. nms non maximus suppression
+# TODO: nms non maximus suppression
 
-"""
 def load_pc_from_pcd(pcd_path):
     p = pcl.load(pcd_path)
     return np.array(list(p), dtype=np.float32)
@@ -29,7 +22,7 @@ def load_pc_from_bin(bin_path):
     obj = np.fromfile(bin_path, dtype=np.float32).reshape(-1, 4)
     return obj
 
-def load_pc_from_bins(bin_dir, batch_size, shuffle=False): #TODO: Generator for 3D data
+def load_pc_from_bins(bin_dir, batch_size, shuffle=False):
     bin_pathes = glob.glob(bin_dir + "/*.bin").sort()
     data_size = len(bin_pathes)
     bathes = None
@@ -42,8 +35,6 @@ def load_pc_from_bins(bin_dir, batch_size, shuffle=False): #TODO: Generator for 
         batches = [perm[i * batch_size:(i + 1) * batch_size] for i in range(int(np.ceil(data_size / batch_size)))]
 
     imgfiles = [[bin_pathes[p] for p in b] for b in batches]
-
-    # imgs = ImageLoader(imgfiles)
 
     for p, imgs in itertools.izip(batches, imgs.wait_images()):
         for index, img in enumerate(imgs):
@@ -121,20 +112,13 @@ def filter_camera_angle(places):
     return places[bool_in]
 
 def filter_car_data(corners):
-    # consider bottom square
-    # print corners[0]
-    # argcor = np.argsort(corners[0], axis=0)
-    # print corners[0].shape
-    # print corners[0][argcor]
     pass
 
 def create_publish_obj(obj, places, rotates, size):
     for place, rotate, sz in zip(places, rotates, size):
         x, y, z = place
-        # print (x, y, z)
         obj.append((x, y, z))
         h, w, l = sz
-        # print h, w, l
         if l > 10:
             continue
         for hei in range(0, int(h*100)):
@@ -233,7 +217,6 @@ def raw_to_voxel(pc, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
 
 def center_to_sphere(places, size, resolution=0.50, min_value=np.array([0., -50., -4.5]), scale=4, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
     """from label center to sphere center"""
-    # for 1/4 sphere
     x_logical = np.logical_and((places[:, 0] < x[1]), (places[:, 0] >= x[0]))
     y_logical = np.logical_and((places[:, 1] < y[1]), (places[:, 1] >= y[0]))
     z_logical = np.logical_and((places[:, 2] < z[1]), (places[:, 2] >= z[0]))
@@ -327,17 +310,6 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
     print sphere_to_center(a, resolution=0.25)
     bbox = sphere_to_center(a, resolution=0.25)
     print corners.shape
-    # a = np.array(
-    #     [[ 19.69109106, 8.70038319, -2.05356455],
-    #     [ 18.27717495, 5.61360097, -1.26570401],
-    #     [ 21.56218159, 8.64504647, -1.58700204],
-    #     [ 20.02987021, 8.84583879, -0.10549831],
-    #     [ 20.75653511, 8.11167407, 0.5703392 ],
-    #     [ 19.77633509, 5.56351113, -0.7579807 ],
-    #     [ 19.72957426, 5.75904274, -0.37826872],
-    #     [ 20.75458926, 5.8138907 , -0.41885149]]
-    # )
-    # print a.shape
     # publish_pc2(pc, bbox.reshape(-1, 3))
     publish_pc2(pc, corners.reshape(-1, 3))
 
@@ -350,7 +322,6 @@ if __name__ == "__main__":
     # bin_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/velodyne_points/data/0000000030.bin"
     # xml_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
-
 
     pcd_path = "../data/training/velodyne/000410.bin"
     label_path = "../data/training/label_2/000410.txt"
