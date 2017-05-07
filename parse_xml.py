@@ -339,5 +339,3 @@ if __name__ == "__main__":
     example()
   else:
     parseXML(*cmdLineArgs[1:])
-
-# (created using vim - the world's best text editor)
