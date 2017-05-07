@@ -10,7 +10,6 @@ import glob
 import std_msgs.msg
 import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
-# from cv_bridge import CvBridge
 from parse_xml import parseXML
 from input_velodyne import *
 import matplotlib.pyplot as plt
@@ -33,7 +32,6 @@ def convert_xyz_to_2d(places):
     print phi.min()
     print phi.max()
     print ave_phi
-    # print np.sqrt(np.sum(places ** 2, axis=1)).shape
     print r.max(), r.min(), c.max(), c.min()
     plt.hist(phi)
     plt.show()
