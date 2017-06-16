@@ -398,7 +398,7 @@ if __name__ == '__main__':
     # train_test(1, pcd_path, label_path=label_path, resolution=0.1, calib_path=calib_path, dataformat="bin", is_velo_cam=True, \
     #         scale=8, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5))
 
-    pcd_path = "../data/testing/velodyne/002397.bin"
-    calib_path = "../data/testing/calib/002397.txt"
+    pcd_path = "/home/katou01/download/testing/velodyne/002397.bin"
+    calib_path = "/home/katou01/download/testing/calib/002397.txt"
     test(1, pcd_path, label_path=None, resolution=0.1, calib_path=calib_path, dataformat="bin", is_velo_cam=True, \
             scale=8, voxel_shape=(800, 800, 40), x=(0, 80), y=(-40, 40), z=(-2.5, 1.5))

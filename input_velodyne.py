@@ -12,7 +12,6 @@ import sensor_msgs.point_cloud2 as pc2
 from sensor_msgs.msg import PointCloud2
 from parse_xml import parseXML
 
-# TODO: nms non maximus suppression
 
 def load_pc_from_pcd(pcd_path):
     """Load PointCloud data from pcd file."""
@@ -294,6 +293,7 @@ def process(velodyne_path, label_path=None, calib_path=None, dataformat="pcd", l
         places, rotates, size = read_labels(label_path, label_type, calib_path=calib_path, is_velo_cam=is_velo_cam, proj_velo=proj_velo)
 
     corners = get_boxcorners(places, rotates, size)
+    print("################", len(pc))
     pc = filter_camera_angle(pc)
     # obj = []
     # obj = create_publish_obj(obj, places, rotates, size)
@@ -322,7 +322,7 @@ if __name__ == "__main__":
     # xml_path = "../data/2011_09_26/2011_09_26_drive_0001_sync/tracklet_labels.xml"
     # process(bin_path, xml_path, dataformat="bin", label_type="xml")
 
-    pcd_path = "../data/training/velodyne/000410.bin"
-    label_path = "../data/training/label_2/000410.txt"
-    calib_path = "../data/training/calib/000410.txt"
+    pcd_path = "/home/katou01/download/training/velodyne/000410.bin"
+    label_path = "/home/katou01/download/training/label_2/000410.txt"
+    calib_path = "/home/katou01/download/training/calib/000410.txt"
     process(pcd_path, label_path, calib_path=calib_path, dataformat="bin", is_velo_cam=True)
