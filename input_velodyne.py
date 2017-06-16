@@ -15,37 +15,17 @@ from parse_xml import parseXML
 # TODO: nms non maximus suppression
 
 def load_pc_from_pcd(pcd_path):
+    """Load PointCloud data from pcd file."""
     p = pcl.load(pcd_path)
     return np.array(list(p), dtype=np.float32)
 
 def load_pc_from_bin(bin_path):
+    """Load PointCloud data from pcd file."""
     obj = np.fromfile(bin_path, dtype=np.float32).reshape(-1, 4)
     return obj
 
-def load_pc_from_bins(bin_dir, batch_size, shuffle=False):
-    bin_pathes = glob.glob(bin_dir + "/*.bin").sort()
-    data_size = len(bin_pathes)
-    bathes = None
-
-    if shuffle:
-        perm = np.random.permutation(data_size)
-        batches = [perm[i * batch_size:(i + 1) * batch_size]]
-    else:
-        perm = np.arange(data_size)
-        batches = [perm[i * batch_size:(i + 1) * batch_size] for i in range(int(np.ceil(data_size / batch_size)))]
-
-    imgfiles = [[bin_pathes[p] for p in b] for b in batches]
-
-    for p, imgs in itertools.izip(batches, imgs.wait_images()):
-        for index, img in enumerate(imgs):
-            imgs[index] = np.array(img, dtype=np.float32)
-        if self._callback is not None:
-            imgs = self._callback.create(np.array(imgs, dtype=np.float32))
-        if self._data_y == None:
-            yield np.array(imgs, dtype=np.float32)
-        yield np.array(imgs, dtype=np.float32), self._data_y[p]
-
 def read_label_from_txt(label_path):
+    """Read label from txt file."""
     text = np.fromfile(label_path)
     bounding_box = []
     with open(label_path, "r") as f:
@@ -67,6 +47,12 @@ def read_label_from_txt(label_path):
         return None, None, None
 
 def read_label_from_xml(label_path):
+    """Read label from xml file.
+
+    # Returns:
+        label_dic (dictionary): labels for one sequence.
+        size (list): Bounding Box Size. [l, w. h]?
+    """
     labels = parseXML(label_path)
     label_dic = {}
     for label in labels:
@@ -87,6 +73,7 @@ def read_label_from_xml(label_path):
     return label_dic, size
 
 def read_calib_file(calib_path):
+    """Read a calibration file."""
     data = {}
     with open(calib_path, 'r') as f:
         for line in f.readlines():
@@ -100,21 +87,22 @@ def read_calib_file(calib_path):
     return data
 
 def proj_to_velo(calib_data):
+    """Projection matrix to 3D axis for 3D Label"""
     rect = calib_data["R0_rect"].reshape(3, 3)
     velo_to_cam = calib_data["Tr_velo_to_cam"].reshape(3, 4)
     inv_rect = np.linalg.inv(rect)
     inv_velo_to_cam = np.linalg.pinv(velo_to_cam[:, :3])
     return np.dot(inv_velo_to_cam, inv_rect)
 
+
 def filter_camera_angle(places):
+    """Filter camera angles for KiTTI Datasets"""
     bool_in = np.logical_and((places[:, 1] < places[:, 0] - 0.27), (-places[:, 1] < places[:, 0] - 0.27))
     # bool_in = np.logical_and((places[:, 1] < places[:, 0]), (-places[:, 1] < places[:, 0]))
     return places[bool_in]
 
-def filter_car_data(corners):
-    pass
-
 def create_publish_obj(obj, places, rotates, size):
+    """Create object of correct data for publisher"""
     for place, rotate, sz in zip(places, rotates, size):
         x, y, z = place
         obj.append((x, y, z))
@@ -131,6 +119,7 @@ def create_publish_obj(obj, places, rotates, size):
     return obj
 
 def get_boxcorners(places, rotates, size):
+    """Create 8 corners of bounding box from bottom center."""
     corners = []
     for place, rotate, sz in zip(places, rotates, size):
         x, y, z = place
@@ -162,7 +151,64 @@ def get_boxcorners(places, rotates, size):
         corners.append(a)
     return np.array(corners)
 
+def publish_pc2(pc, obj):
+    """Publisher of PointCloud data"""
+    pub = rospy.Publisher("/points_raw", PointCloud2, queue_size=1000000)
+    rospy.init_node("pc2_publisher")
+    header = std_msgs.msg.Header()
+    header.stamp = rospy.Time.now()
+    header.frame_id = "velodyne"
+    points = pc2.create_cloud_xyz32(header, pc[:, :3])
+
+    pub2 = rospy.Publisher("/points_raw1", PointCloud2, queue_size=1000000)
+    header = std_msgs.msg.Header()
+    header.stamp = rospy.Time.now()
+    header.frame_id = "velodyne"
+    points2 = pc2.create_cloud_xyz32(header, obj)
+
+    r = rospy.Rate(0.1)
+    while not rospy.is_shutdown():
+        pub.publish(points)
+        pub2.publish(points2)
+        r.sleep()
+
+def raw_to_voxel(pc, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
+    """Convert PointCloud2 to Voxel"""
+    logic_x = np.logical_and(pc[:, 0] >= x[0], pc[:, 0] < x[1])
+    logic_y = np.logical_and(pc[:, 1] >= y[0], pc[:, 1] < y[1])
+    logic_z = np.logical_and(pc[:, 2] >= z[0], pc[:, 2] < z[1])
+    pc = pc[:, :3][np.logical_and(logic_x, np.logical_and(logic_y, logic_z))]
+    pc =((pc - np.array([x[0], y[0], z[0]])) / resolution).astype(np.int32)
+    voxel = np.zeros((int((x[1] - x[0]) / resolution), int((y[1] - y[0]) / resolution), int(round((z[1]-z[0]) / resolution))))
+    voxel[pc[:, 0], pc[:, 1], pc[:, 2]] = 1
+    return voxel
+
+def center_to_sphere(places, size, resolution=0.50, min_value=np.array([0., -50., -4.5]), scale=4, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
+    """Convert object label to Training label for objectness loss"""
+    x_logical = np.logical_and((places[:, 0] < x[1]), (places[:, 0] >= x[0]))
+    y_logical = np.logical_and((places[:, 1] < y[1]), (places[:, 1] >= y[0]))
+    z_logical = np.logical_and((places[:, 2] < z[1]), (places[:, 2] >= z[0]))
+    xyz_logical = np.logical_and(x_logical, np.logical_and(y_logical, z_logical))
+    center = places.copy()
+    center[:, 2] = center[:, 2] + size[:, 0] / 2.
+    sphere_center = ((center[xyz_logical] - min_value) / (resolution * scale)).astype(np.int32)
+    return sphere_center
+
+def sphere_to_center(p_sphere, resolution=0.5, scale=4, min_value=np.array([0., -50., -4.5])):
+    """from sphere center to label center"""
+    center = p_sphere * (resolution*scale) + min_value
+    return center
+
+def voxel_to_corner(corner_vox, resolution, center):#TODO
+    """Create 3D corner from voxel and the diff to corner"""
+    corners = center + corner_vox
+    return corners
+
 def read_labels(label_path, label_type, calib_path=None, is_velo_cam=False, proj_velo=None):
+    """Read labels from xml or txt file.
+    Original Label value is shifted about 0.27m from object center.
+    So need to revise the position of objects.
+    """
     if label_type == "txt": #TODO
         places, size, rotates = read_label_from_txt(label_path)
         if places is None:
@@ -185,64 +231,15 @@ def read_labels(label_path, label_type, calib_path=None, is_velo_cam=False, proj
 
     return places, rotates, size
 
-def publish_pc2(pc, obj):
-    pub = rospy.Publisher("/points_raw", PointCloud2, queue_size=1000000)
-    rospy.init_node("pc2_publisher")
-    header = std_msgs.msg.Header()
-    header.stamp = rospy.Time.now()
-    header.frame_id = "velodyne"
-    points = pc2.create_cloud_xyz32(header, pc[:, :3])
-
-    pub2 = rospy.Publisher("/points_raw1", PointCloud2, queue_size=1000000)
-    header = std_msgs.msg.Header()
-    header.stamp = rospy.Time.now()
-    header.frame_id = "velodyne"
-    points2 = pc2.create_cloud_xyz32(header, obj)
-
-    r = rospy.Rate(0.1)
-    while not rospy.is_shutdown():
-        pub.publish(points)
-        pub2.publish(points2)
-        r.sleep()
-
-def raw_to_voxel(pc, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
-    logic_x = np.logical_and(pc[:, 0] >= x[0], pc[:, 0] < x[1])
-    logic_y = np.logical_and(pc[:, 1] >= y[0], pc[:, 1] < y[1])
-    logic_z = np.logical_and(pc[:, 2] >= z[0], pc[:, 2] < z[1])
-    pc = pc[:, :3][np.logical_and(logic_x, np.logical_and(logic_y, logic_z))]
-    pc =((pc - np.array([x[0], y[0], z[0]])) / resolution).astype(np.int32)
-    voxel = np.zeros((int((x[1] - x[0]) / resolution), int((y[1] - y[0]) / resolution), int(round((z[1]-z[0]) / resolution))))
-    voxel[pc[:, 0], pc[:, 1], pc[:, 2]] = 1
-    return voxel
-
-def center_to_sphere(places, size, resolution=0.50, min_value=np.array([0., -50., -4.5]), scale=4, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5)):
-    """from label center to sphere center"""
-    x_logical = np.logical_and((places[:, 0] < x[1]), (places[:, 0] >= x[0]))
-    y_logical = np.logical_and((places[:, 1] < y[1]), (places[:, 1] >= y[0]))
-    z_logical = np.logical_and((places[:, 2] < z[1]), (places[:, 2] >= z[0]))
-    xyz_logical = np.logical_and(x_logical, np.logical_and(y_logical, z_logical))
-    center = places.copy()
-    center[:, 2] = center[:, 2] + size[:, 0] / 2.
-    sphere_center = ((center[xyz_logical] - min_value) / (resolution * scale)).astype(np.int32)
-    return sphere_center
-
-def sphere_to_center(p_sphere, resolution=0.5, scale=4, min_value=np.array([0., -50., -4.5])):
-    """from sphere center to label center"""
-    center = p_sphere * (resolution*scale) + min_value
-    return center
-
-def voxel_to_corner(corner_vox, resolution, center):#TODO
-    """from """
-    corners = center + corner_vox
-    return corners
-
 def create_label(places, size, corners, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5), scale=4, min_value=np.array([0., -50., -4.5])):
+    """Create training Labels which satisfy the range of experiment"""
     x_logical = np.logical_and((places[:, 0] < x[1]), (places[:, 0] >= x[0]))
     y_logical = np.logical_and((places[:, 1] < y[1]), (places[:, 1] >= y[0]))
     z_logical = np.logical_and((places[:, 2] + size[:, 0]/2. < z[1]), (places[:, 2] + size[:, 0]/2. >= z[0]))
     xyz_logical = np.logical_and(x_logical, np.logical_and(y_logical, z_logical))
+
     center = places.copy()
-    center[:, 2] = center[:, 2] + size[:, 0] / 2.
+    center[:, 2] = center[:, 2] + size[:, 0] / 2. # Move bottom to center
     sphere_center = ((center[xyz_logical] - min_value) / (resolution * scale)).astype(np.int32)
 
     train_corners = corners[xyz_logical].copy()
@@ -252,7 +249,7 @@ def create_label(places, size, corners, resolution=0.50, x=(0, 90), y=(-50, 50),
     return sphere_center, train_corners
 
 def corner_to_train(corners, sphere_center, resolution=0.50, x=(0, 90), y=(-50, 50), z=(-4.5, 5.5), scale=4, min_value=np.array([0., -50., -4.5])):
-    """compare original corners  and  sphere centers"""
+    """Convert corner to Training label for regression loss"""
     x_logical = np.logical_and((corners[:, :, 0] < x[1]), (corners[:, :, 0] >= x[0]))
     y_logical = np.logical_and((corners[:, :, 1] < y[1]), (corners[:, :, 1] >= y[0]))
     z_logical = np.logical_and((corners[:, :, 2] < z[1]), (corners[:, :, 2] >= z[0]))
