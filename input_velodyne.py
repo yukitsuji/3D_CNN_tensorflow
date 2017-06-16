@@ -261,11 +261,13 @@ def corner_to_train(corners, sphere_center, resolution=0.50, x=(0, 90), y=(-50, 
     return train_corners
 
 def corner_to_voxel(voxel_shape, corners, sphere_center, scale=4):
+    """Create final regression label from corner"""
     corner_voxel = np.zeros((voxel_shape[0] / scale, voxel_shape[1] / scale, voxel_shape[2] / scale, 24))
     corner_voxel[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = corners
     return corner_voxel
 
 def create_objectness_label(sphere_center, resolution=0.5, x=90, y=100, z=10, scale=4):
+    """Create Objectness label"""
     obj_maps = np.zeros((int(x / (resolution * scale)), int(y / (resolution * scale)), int(round(z / (resolution * scale)))))
     obj_maps[sphere_center[:, 0], sphere_center[:, 1], sphere_center[:, 2]] = 1
     return obj_maps
