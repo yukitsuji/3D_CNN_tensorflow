@@ -11,6 +11,12 @@ Data Loading Function is "input_velodyne.py"
 <img src="./image/test_3000.png"/>  
 <img src="./image/test_5000.png"/>  
 
+## Requirement
+- Python
+- tensorflow
+- ROS
+- Python-PCL (If you will not use pcl, please comment out related code in input_velodyne.py
+
 
 ## KiTTI Data Processing
 <b>Dataset is KITTI Object Detection Datasets<b>  
