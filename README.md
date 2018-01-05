@@ -19,5 +19,8 @@ Data Loading Function is "input_velodyne.py"
 
 
 ## KiTTI Data Processing
-<b>Dataset is KITTI Object Detection Datasets<b>  
-<http://www.cvlibs.net/datasets/kitti/eval_object.php>
+<b>Dataset is KITTI 3D Object Detection Datasets<b>  
+<http://www.cvlibs.net/datasets/kitti/eval_object.php?obj_benchmark=3d>
+- Velodyne PointCloud
+- training labels
+- Calibration
